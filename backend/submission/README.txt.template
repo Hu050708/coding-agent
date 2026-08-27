@@ -1,0 +1,8 @@
+项目：ClearLoop 编程智能体
+仓库地址：<项目完成并公开后填写 GitHub URL>
+
+运行：需 Python 3.11 与 Node.js 22。进入仓库的 backend 目录，执行“conda env create -f environment.yml”和“conda activate clearloop-agent”。CLI 需在本机环境变量中设置 DEEPSEEK_API_KEY，示例：clearloop --workspace <项目目录> "修复问题、补测试并验证"。WebUI 可将密钥和 CLEARLOOP_ALLOWED_ROOT 写入未入库的 backend/.env，运行 clearloop-web；另一终端进入 frontend，执行 npm ci 和 npm run dev，再访问 http://127.0.0.1:5173/。
+
+特色：不使用 Agent 框架或 Agent SDK，自行实现完整消息历史、DeepSeek tool calling 解析、五个本地工具、循环终止、重试和预算。源码按 core/providers/tools/security/diagnostics 分层；文件写入受工作区、保护路径和 SHA-256 乐观锁约束；命令使用 argv 与 shell=False，并实行 ALLOW/CONFIRM/DENY。提供假模型协议测试、真实 API smoke、日期边界演示项目及独立隐藏验收器。
+
+说明：命令控制不是 OS 沙箱；诊断轨迹不记录 API key、思考内容或完整源码。开发中使用 Codex/ChatGPT 辅助分析、实现与审查，作者理解并验证全部设计，对项目负责。

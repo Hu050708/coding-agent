@@ -1,0 +1,36 @@
+:root {
+  color-scheme: light;
+
+  --porcelain: #f3f7f8;
+  --porcelain-deep: #e8eff1;
+  --surface: #f9fbfb;
+  --surface-strong: #edf3f4;
+  --ink: #14262e;
+  --ink-soft: #3e535c;
+  --ink-muted: #6a7d84;
+  --line: #cbd8dc;
+  --line-strong: #aebfc5;
+  --cobalt: #2d5bce;
+  --cobalt-deep: #2348a5;
+  --cobalt-soft: #dfe7fb;
+  --amber: #c8791a;
+  --amber-soft: #f8ead6;
+  --success: #167f68;
+  --success-soft: #dcefe9;
+  --danger: #c74b50;
+  --danger-deep: #a83b40;
+  --danger-soft: #f7e2e3;
+
+  --font-display: Bahnschrift, "Segoe UI Variable Display", "Segoe UI", sans-serif;
+  --font-body: "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  --font-mono: "Cascadia Mono", "Cascadia Code", Consolas, monospace;
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --shadow-panel: 0 18px 52px rgba(44, 78, 91, 0.1);
+  --shadow-approval: 0 14px 38px rgba(142, 86, 19, 0.12);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --header-height: 64px;
+  --page-gutter: clamp(16px, 2.6vw, 40px);
+}

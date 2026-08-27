@@ -1,17 +1,17 @@
-# ClearLoop backend
+# Coding Agent backend
 
 The backend contains the complete Python application: the coding-agent core,
 the FastAPI transport, run orchestration, workspace-scoped SQLite memory,
 command safety, diagnostics, tests, evaluation fixtures, and supporting
-scripts. There is one import namespace: `clearloop`.
+scripts. There is one import namespace: `coding_agent`.
 
 ## Environment
 
 Run all Python commands from this directory:
 
 ```powershell
-conda env update -n clearloop-agent -f environment.yml
-conda activate clearloop-agent
+conda env update -n coding-agent -f environment.yml
+conda activate coding-agent
 pip install -e ".[dev,web]"
 ```
 
@@ -25,13 +25,13 @@ only. Never commit the real `.env` file.
 Command-line agent:
 
 ```powershell
-clearloop --workspace E:\code\your-project "Describe the coding task"
+coding-agent --workspace E:\code\your-project "Describe the coding task"
 ```
 
 Loopback-only Web API:
 
 ```powershell
-clearloop-web
+coding-agent-web
 ```
 
 The API listens on `http://127.0.0.1:8000` by default. Interactive API docs
@@ -42,9 +42,9 @@ are available at `/api/docs`.
 The Web API reads enabled memory once at the start of each run. Writes only
 happen through explicit memory CRUD requests or the UI's editable confirmation
 flow; the model has no memory-writing tool. The default database is
-`%LOCALAPPDATA%\ClearLoop\clearloop.db`, outside agent workspaces. Set
-`CLEARLOOP_DATA_DIR` to another absolute local directory when needed; it must
-remain outside `CLEARLOOP_ALLOWED_ROOT` so agent tools cannot modify the store.
+`%LOCALAPPDATA%\Coding Agent\coding-agent.db`, outside agent workspaces. Set
+`CODING_AGENT_DATA_DIR` to another absolute local directory when needed; it must
+remain outside `CODING_AGENT_ALLOWED_ROOT` so agent tools cannot modify the store.
 Memory mutations are rejected while the same workspace has an active run, and
 a run cannot start while a mutation for that workspace is in flight. Run-result
 provenance is accepted only from a successfully completed retained run.
@@ -58,8 +58,8 @@ counts, and entry IDs, never memory content.
 ```powershell
 python -m pytest
 python -m compileall -q src
-python -m clearloop --help
-clearloop-web --help
+python -m coding_agent --help
+coding-agent-web --help
 ```
 
 The independent demo trial is started with:

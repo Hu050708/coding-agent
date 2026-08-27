@@ -1,4 +1,4 @@
-name: clearloop-agent
+name: coding-agent
 channels:
   - defaults
 dependencies:

@@ -4,14 +4,14 @@ import json
 import sys
 from pathlib import Path
 
-from clearloop.security import Workspace
-from clearloop.tools import TOOL_SCHEMAS, ToolError, ToolRegistry
-from clearloop.tools.command import ToolError as CommandToolError
-from clearloop.tools.contracts import ToolError as ContractToolError
-from clearloop.tools.filesystem import ToolError as FilesystemToolError
-from clearloop.tools.registry import TOOL_SCHEMAS as RegistrySchemas
-from clearloop.tools.registry import ToolError as RegistryToolError
-from clearloop.tools.schemas import TOOL_SCHEMAS as SchemaModuleSchemas
+from coding_agent.security import Workspace
+from coding_agent.tools import TOOL_SCHEMAS, ToolError, ToolRegistry
+from coding_agent.tools.command import ToolError as CommandToolError
+from coding_agent.tools.contracts import ToolError as ContractToolError
+from coding_agent.tools.filesystem import ToolError as FilesystemToolError
+from coding_agent.tools.registry import TOOL_SCHEMAS as RegistrySchemas
+from coding_agent.tools.registry import ToolError as RegistryToolError
+from coding_agent.tools.schemas import TOOL_SCHEMAS as SchemaModuleSchemas
 
 
 def decode(payload: str) -> dict:

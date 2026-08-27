@@ -8,8 +8,8 @@ import pytest
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
-from clearloop.core import AdapterProtocolError, AdapterRequestError
-from clearloop.providers.deepseek import DeepSeekAdapter, normalize_completion
+from coding_agent.core import AdapterProtocolError, AdapterRequestError
+from coding_agent.providers.deepseek import DeepSeekAdapter, normalize_completion
 
 
 class FakeCompletions:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
-from clearloop.memory import (
+from coding_agent.memory import (
     MemoryEntry,
     MemoryKind,
     MemoryPromptBuilder,

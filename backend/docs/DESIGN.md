@@ -1,16 +1,16 @@
-# ClearLoop 编程智能体设计（v0.4，实现态）
+# Coding Agent 编程智能体设计（v0.4，实现态）
 
 日期：2026-08-27<br>
 状态：核心闭环、FastAPI/Vue WebUI 与第一版项目记忆已完成集成验证<br>
-原则：先证明一个最小闭环真实、可靠、合规，再增加功能。`ClearLoop` 表示核心循环透明、可观察、可解释。
+原则：先证明一个最小闭环真实、可靠、合规，再增加功能。`Coding Agent` 表示核心循环透明、可观察、可解释。
 
 v0.4 在不改变题目要求的自研 Agent 核心前提下增加了本机 WebUI 和项目记忆。仓库根层
-只保留 `backend/`、`frontend/` 两个业务目录；Python 代码统一使用 `clearloop` 命名空间。
+只保留 `backend/`、`frontend/` 两个业务目录；Python 代码统一使用 `coding_agent` 命名空间。
 Web 与记忆是核心循环之外的适配/编排能力，不替模型解析工具，也不替 Agent 执行状态机。
 
 ## 1. 项目目标
 
-用户指定一个本地工作目录并给出一个编程任务。ClearLoop 使用 DeepSeek 官方 API 反复选择和调用本项目自定义的本地工具，完成：
+用户指定一个本地工作目录并给出一个编程任务。Coding Agent 使用 DeepSeek 官方 API 反复选择和调用本项目自定义的本地工具，完成：
 
 ```text
 理解任务 -> 查看项目 -> 执行测试/命令 -> 修改文件 -> 再次验证 -> 汇报
@@ -110,7 +110,7 @@ Agent Controller <------> DeepSeek Adapter <------> Chat Completions
 模块按职责分包，但不机械地为每个类建目录：
 
 ```text
-backend/src/clearloop/
+backend/src/coding_agent/
   cli.py                    # 薄组合根：参数、配置、确认、退出码
   main.py / web.py          # FastAPI 组合根和 loopback Web 入口
   api/                      # HTTP schema、路由、错误和依赖
@@ -150,8 +150,8 @@ backend/src/clearloop/
 ### 4.2 第一版项目记忆边界
 
 - 作用域只有“规范化后的同一工作区”，隔离键是规范路径的 SHA-256；不做跨项目或用户画像。
-- SQLite 默认位于 `%LOCALAPPDATA%\ClearLoop\clearloop.db`，并强制
-  `CLEARLOOP_DATA_DIR` 位于 `CLEARLOOP_ALLOWED_ROOT` 之外，不放入 Agent 可操作的工作区。
+- SQLite 默认位于 `%LOCALAPPDATA%\Coding Agent\coding-agent.db`，并强制
+  `CODING_AGENT_DATA_DIR` 位于 `CODING_AGENT_ALLOWED_ROOT` 之外，不放入 Agent 可操作的工作区。
 - 每次运行开始只读取一次不可变快照：启用项按置顶、与当前任务的中英文相关度、更新时间排序，
   最多 8 条且正文总计不超过 6000 字符。
 - 记忆正文作为普通 user JSON 中的不可信参考资料，当前任务放在最后；固定 system policy 明确
@@ -445,7 +445,7 @@ Agent 核心的唯一第三方运行依赖是已验证并固定版本的 `openai
 
 依赖单一真源为 `pyproject.toml`。`environment.yml` 只创建 Python 3.11 + pip 并从当前项目安装 editable 依赖，避免同时维护两套版本号。
 
-开发机使用 Conda 创建独立 `clearloop-agent` 环境，不升级 base、不修改全局 PATH、不复用旧环境；`environment.yml` 同时安装 CLI、Web 与测试依赖。
+开发机使用 Conda 创建独立 `coding-agent` 环境，不升级 base、不修改全局 PATH、不复用旧环境；`environment.yml` 同时安装 CLI、Web 与测试依赖。
 
 API key 不提供命令行参数。Web 服务从进程环境或本机 `backend/.env` 读取；CLI、live smoke
 和 demo 脚本只读取当前进程的 `DEEPSEEK_API_KEY`。真实 `.env` 被读取保护和 `.gitignore`
@@ -534,7 +534,7 @@ API key 不提供命令行参数。Web 服务从进程环境或本机 `backend/.
 
 ## 17. 已确认事项与后续输入
 
-1. 项目名 `ClearLoop`、目录/未来仓库名 `clearloop-coding-agent`、Conda 环境名 `clearloop-agent` 已确认。
+1. 项目名 `Coding Agent`、发行包/未来仓库名 `coding-agent`、Conda 环境名 `coding-agent` 已确认；当前本地根目录在本阶段不移动。
 2. 用户自行处理 GitHub 仓库与上传；当前实现过程不执行任何 Git 操作。
 3. DeepSeek 账号已有可用 API key 和余额；key 不通过聊天发送，真实联调时只从本机环境变量读取。
 4. 最终 ZIP 使用的真实姓名在提交阶段再提供。

@@ -1,4 +1,4 @@
-"""Create and evaluate one fresh, real-API ClearLoop demo trial.
+"""Create and evaluate one fresh, real-API Coding Agent demo trial.
 
 The script never overwrites or deletes a candidate directory.  It invokes the
 public CLI in a child process, then runs the independent evaluator.  The API key
@@ -53,7 +53,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     agent_command = [
         sys.executable,
         "-m",
-        "clearloop",
+        "coding-agent",
         "--workspace",
         os.fspath(output),
         "--model",
@@ -72,7 +72,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             check=False,
         )
     except subprocess.TimeoutExpired:
-        print("ClearLoop child process exceeded the outer demo timeout.", file=sys.stderr)
+        print("Coding Agent child process exceeded the outer demo timeout.", file=sys.stderr)
         return 1
 
     evaluator_environment = {

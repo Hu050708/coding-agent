@@ -9,13 +9,13 @@ import threading
 from fastapi.testclient import TestClient
 import pytest
 
-from clearloop.config import AppSettings
-from clearloop.core import AgentStatus, RunResult, TerminationReason, TokenUsage
-from clearloop.main import create_app
-from clearloop.memory import MemoryRepository, MemoryService, MemorySummary
-from clearloop.runs import agent_runner as runner_module
-from clearloop.runs.agent_runner import RunOutcome
-from clearloop.security import WorkspacePolicy
+from coding_agent.config import AppSettings
+from coding_agent.core import AgentStatus, RunResult, TerminationReason, TokenUsage
+from coding_agent.main import create_app
+from coding_agent.memory import MemoryRepository, MemoryService, MemorySummary
+from coding_agent.runs import agent_runner as runner_module
+from coding_agent.runs.agent_runner import RunOutcome
+from coding_agent.security import WorkspacePolicy
 
 
 class ImmediateRunner:
@@ -569,5 +569,5 @@ def test_explicit_test_data_dir_never_uses_user_default(tmp_path, monkeypatch):
     )
 
     with TestClient(app):
-        assert (explicit / "clearloop.db").is_file()
+        assert (explicit / "coding-agent.db").is_file()
     assert not sentinel_default.exists()

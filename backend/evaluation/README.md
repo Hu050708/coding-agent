@@ -1,6 +1,6 @@
 # Independent demo evaluation
 
-Keep this directory outside the workspace handed to ClearLoop. It validates a
+Keep this directory outside the workspace handed to Coding Agent. It validates a
 candidate copy of `examples/date_boundary_bug` with:
 
 ```powershell

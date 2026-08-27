@@ -20,7 +20,7 @@ export interface RunConsoleDependencies {
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null
 }
 
-const LAST_RUN_KEY = 'clearloop.web.lastRunId'
+const LAST_RUN_KEY = 'coding-agent.web.lastRunId'
 
 function browserStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
   try {

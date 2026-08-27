@@ -5,7 +5,7 @@ import hashlib
 import json
 import sys
 
-from clearloop.core import (
+from coding_agent.core import (
     Agent,
     AgentConfig,
     AgentStatus,
@@ -13,8 +13,8 @@ from clearloop.core import (
     ModelCompletion,
     ToolCall,
 )
-from clearloop.security import Workspace
-from clearloop.tools import ToolRegistry
+from coding_agent.security import Workspace
+from coding_agent.tools import ToolRegistry
 
 
 class ScriptedAdapter:

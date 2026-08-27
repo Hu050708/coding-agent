@@ -87,7 +87,7 @@ describe('useRunConsole', () => {
       use_memory: true,
     })
     expect(consoleState.state.run?.run_id).toBe('run-42')
-    expect(storage.setItem).toHaveBeenCalledWith('clearloop.web.lastRunId', 'run-42')
+    expect(storage.setItem).toHaveBeenCalledWith('coding-agent.web.lastRunId', 'run-42')
     expect(callbacks).not.toBeNull()
 
     consoleState.dispose()
@@ -227,7 +227,7 @@ describe('useRunConsole', () => {
     await restoring
 
     expect(consoleState.state.run?.run_id).toBe('run-new')
-    expect(storage.setItem).toHaveBeenCalledWith('clearloop.web.lastRunId', 'run-new')
+    expect(storage.setItem).toHaveBeenCalledWith('coding-agent.web.lastRunId', 'run-new')
     expect(storage.removeItem).not.toHaveBeenCalled()
     consoleState.dispose()
   })

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from clearloop.security import CommandDecision, CommandRequest, Workspace
-from clearloop.tools import ToolRegistry
+from coding_agent.security import CommandDecision, CommandRequest, Workspace
+from coding_agent.tools import ToolRegistry
 
 
 def decode(payload: str) -> dict:

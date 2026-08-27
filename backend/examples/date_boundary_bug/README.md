@@ -1,6 +1,6 @@
 # logstats date-boundary demo
 
-This is a deliberately small project used to demonstrate ClearLoop on a real
+This is a deliberately small project used to demonstrate Coding Agent on a real
 bug-fixing task. Each input line is a JSON object with an ISO-8601 `timestamp`
 and a `level`.
 

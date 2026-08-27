@@ -18,14 +18,14 @@ frontend/coverage/
 *.pem
 *.key
 
-.clearloop/
-.clearloop-traces/
+.coding-agent/
+.coding-agent-traces/
 .agent-traces/
-.clearloop-web/
-.clearloop-data/
-clearloop.db
-clearloop.db-wal
-clearloop.db-shm
+.coding-agent-web/
+.coding-agent-data/
+coding-agent.db
+coding-agent.db-wal
+coding-agent.db-shm
 tmp/
 *.mp4
 *.zip

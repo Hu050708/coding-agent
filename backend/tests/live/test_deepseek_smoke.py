@@ -1,7 +1,7 @@
 """Opt-in real DeepSeek vertical smoke test.
 
 Normal test runs skip this module. To spend API credits explicitly, set both
-DEEPSEEK_API_KEY and CLEARLOOP_RUN_LIVE=1, then run this file directly.
+DEEPSEEK_API_KEY and CODING_AGENT_RUN_LIVE=1, then run this file directly.
 """
 
 from __future__ import annotations
@@ -11,24 +11,24 @@ from uuid import uuid4
 
 import pytest
 
-from clearloop.core import Agent, AgentConfig, AgentStatus
-from clearloop.providers import DeepSeekAdapter
-from clearloop.security import Workspace
-from clearloop.tools import ToolRegistry
+from coding_agent.core import Agent, AgentConfig, AgentStatus
+from coding_agent.providers import DeepSeekAdapter
+from coding_agent.security import Workspace
+from coding_agent.tools import ToolRegistry
 
 
-_LIVE_ENABLED = os.environ.get("CLEARLOOP_RUN_LIVE") == "1" and bool(
+_LIVE_ENABLED = os.environ.get("CODING_AGENT_RUN_LIVE") == "1" and bool(
     os.environ.get("DEEPSEEK_API_KEY")
 )
 pytestmark = pytest.mark.skipif(
     not _LIVE_ENABLED,
-    reason="requires explicit CLEARLOOP_RUN_LIVE=1 and DEEPSEEK_API_KEY",
+    reason="requires explicit CODING_AGENT_RUN_LIVE=1 and DEEPSEEK_API_KEY",
 )
 
 
 @pytest.mark.parametrize("trial", range(3))
 def test_real_read_file_tool_round_trip(tmp_path, trial):
-    token = f"clearloop-live-{trial}-{uuid4().hex}"
+    token = f"coding-agent-live-{trial}-{uuid4().hex}"
     (tmp_path / "note.txt").write_text(token + "\n", encoding="utf-8", newline="\n")
 
     adapter = DeepSeekAdapter(

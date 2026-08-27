@@ -23,9 +23,9 @@ const healthTone = computed(() => {
 
 <template>
   <header class="console-header">
-    <div class="brand" aria-label="ClearLoop 本机代理控制台">
+    <div class="brand" aria-label="Coding Agent 本机代理控制台">
       <span class="brand-mark" aria-hidden="true">CL</span>
-      <span class="brand-name">ClearLoop</span>
+      <span class="brand-name">Coding Agent</span>
       <span class="brand-context">本机代理控制台</span>
     </div>
 

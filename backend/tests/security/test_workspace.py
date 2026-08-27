@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from clearloop.security import CommandDecision, Workspace, WorkspaceError
-from clearloop.security.command_policy import classify_command
-from clearloop.security.command_policy import (
+from coding_agent.security import CommandDecision, Workspace, WorkspaceError
+from coding_agent.security.command_policy import classify_command
+from coding_agent.security.command_policy import (
     CommandDecision as PolicyCommandDecision,
     CommandRequest as PolicyCommandRequest,
     should_inherit_environment_name,
 )
-from clearloop.security.workspace import (
+from coding_agent.security.workspace import (
     CommandDecision as WorkspaceCommandDecision,
     CommandRequest as WorkspaceCommandRequest,
 )

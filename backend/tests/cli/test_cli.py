@@ -3,9 +3,9 @@ from __future__ import annotations
 import io
 from types import SimpleNamespace
 
-import clearloop.cli as cli
-from clearloop.core import AgentStatus, TerminationReason
-from clearloop.security import CommandDecision, CommandRequest
+import coding_agent.cli as cli
+from coding_agent.core import AgentStatus, TerminationReason
+from coding_agent.security import CommandDecision, CommandRequest
 
 
 def _options(tmp_path, *extra: str):

@@ -6,10 +6,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from clearloop.config import AppSettings
-from clearloop.main import create_app
-from clearloop.runs.agent_runner import RunOutcome, RunSpec
-from clearloop.security import CommandDecision, CommandRequest
+from coding_agent.config import AppSettings
+from coding_agent.main import create_app
+from coding_agent.runs.agent_runner import RunOutcome, RunSpec
+from coding_agent.security import CommandDecision, CommandRequest
 
 
 class ImmediateRunner:
@@ -145,7 +145,7 @@ def test_health_workspace_run_status_and_sse_contract(tmp_path):
         assert health.status_code == 200
         assert health.json() == {
             "status": "ok",
-            "service": "clearloop-web",
+            "service": "coding-agent-web",
             "api_key_configured": True,
             "model": "fake-deepseek",
             "allowed_root": str(tmp_path.resolve()),

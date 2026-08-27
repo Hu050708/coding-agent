@@ -1,6 +1,6 @@
-# ClearLoop
+# Coding Agent
 
-ClearLoop 是一个从零实现的轻量编程智能体，也是一个仅供本机使用的可视化执行控制台。
+Coding Agent 是一个从零实现的轻量编程智能体，也是一个仅供本机使用的可视化执行控制台。
 模型负责选择工具，本项目自己维护消息历史、解析 tool calls、校验参数、执行本地工具、
 处理审批与取消，并根据预算和协议状态决定循环何时结束。
 
@@ -19,7 +19,7 @@ agent_project/
 └─ .gitignore
 ```
 
-后端只有一个 Python 导入命名空间 `clearloop`：
+后端只有一个 Python 导入命名空间 `coding_agent`：
 
 ```text
 FastAPI / CLI
@@ -41,8 +41,8 @@ FastAPI / CLI
 
 ```powershell
 Set-Location E:\code\agent_project\backend
-conda env update -n clearloop-agent -f environment.yml
-conda activate clearloop-agent
+conda env update -n coding-agent -f environment.yml
+conda activate coding-agent
 python -m pip install -e ".[dev,web]"
 
 Set-Location E:\code\agent_project\frontend
@@ -59,10 +59,10 @@ conda env create -f environment.yml
 
 ```dotenv
 DEEPSEEK_API_KEY=replace-with-your-own-key
-CLEARLOOP_ALLOWED_ROOT=E:\code
+CODING_AGENT_ALLOWED_ROOT=E:\code
 ```
 
-`CLEARLOOP_ALLOWED_ROOT` 必须是已存在的绝对目录，WebUI 只能选择它下面的工作区。不要把
+`CODING_AGENT_ALLOWED_ROOT` 必须是已存在的绝对目录，WebUI 只能选择它下面的工作区。不要把
 真实密钥写进截图、视频、终端命令或公开文件。
 
 ## 启动 WebUI
@@ -73,8 +73,8 @@ CLEARLOOP_ALLOWED_ROOT=E:\code
 
 ```powershell
 Set-Location E:\code\agent_project\backend
-conda activate clearloop-agent
-clearloop-web
+conda activate coding-agent
+coding-agent-web
 ```
 
 终端 2：
@@ -87,7 +87,7 @@ npm run dev
 浏览器打开 <http://127.0.0.1:5173/>。FastAPI 文档位于
 <http://127.0.0.1:8000/api/docs>。结束时在两个终端分别按 `Ctrl+C`。
 
-后端和前端都只绑定 `127.0.0.1`。如果修改 `CLEARLOOP_WEB_PORT`，还要同步修改
+后端和前端都只绑定 `127.0.0.1`。如果修改 `CODING_AGENT_WEB_PORT`，还要同步修改
 `frontend/vite.config.ts` 的代理目标。
 
 ## 项目记忆
@@ -105,9 +105,9 @@ npm run dev
 记忆支持偏好、事实、决策和备注，可编辑、置顶、停用、删除或按工作区清空。运行结果的
 “保存为项目记忆”会先打开可编辑确认框，不会自动保存完整回复、推理、工具输出、源码或任务。
 
-SQLite 默认位于 `%LOCALAPPDATA%\ClearLoop\clearloop.db`，不放在 Agent 可操作的工作区内；
-可用 `CLEARLOOP_DATA_DIR` 指定其他本机绝对目录，但必须位于
-`CLEARLOOP_ALLOWED_ROOT` 之外。提供给模型的记忆被标记为不可信参考，
+SQLite 默认位于 `%LOCALAPPDATA%\Coding Agent\coding-agent.db`，不放在 Agent 可操作的工作区内；
+可用 `CODING_AGENT_DATA_DIR` 指定其他本机绝对目录，但必须位于
+`CODING_AGENT_ALLOWED_ROOT` 之外。提供给模型的记忆被标记为不可信参考，
 不能覆盖当前任务、安全策略、审批、预算或工作区边界。
 
 ## CLI
@@ -115,14 +115,14 @@ SQLite 默认位于 `%LOCALAPPDATA%\ClearLoop\clearloop.db`，不放在 Agent �
 安装后可在任意目录运行：
 
 ```powershell
-clearloop --workspace E:\path\to\project "修复日期边界问题，补回归测试并运行测试"
+coding-agent --workspace E:\path\to\project "修复日期边界问题，补回归测试并运行测试"
 ```
 
 CLI 与真实 demo 只读取当前终端进程中的 `DEEPSEEK_API_KEY`，不会读取
 `backend/.env`；`.env` 是 Web 服务的本机配置入口。
 
 默认逐条确认非白名单命令。`--yes` 只能批准策略判定为 `CONFIRM` 的命令，不能绕过
-`DENY`。使用 `clearloop --help` 查看模型、预算和运行选项。
+`DENY`。使用 `coding-agent --help` 查看模型、预算和运行选项。
 
 ## 验证
 
@@ -130,11 +130,11 @@ CLI 与真实 demo 只读取当前终端进程中的 `DEEPSEEK_API_KEY`，不会
 
 ```powershell
 Set-Location E:\code\agent_project\backend
-conda activate clearloop-agent
+conda activate coding-agent
 python -m pytest
 python -m compileall -q src
-python -m clearloop --help
-clearloop-web --help
+python -m coding_agent --help
+coding-agent-web --help
 ```
 
 前端：

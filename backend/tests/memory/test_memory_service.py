@@ -8,15 +8,15 @@ import threading
 
 import pytest
 
-from clearloop.memory import (
+from coding_agent.memory import (
     MemoryKind,
     MemoryRepository,
     MemoryRepositoryError,
     MemoryService,
     MemorySource,
 )
-from clearloop.memory.service import MemoryServiceError
-from clearloop.security import WorkspacePolicy
+from coding_agent.memory.service import MemoryServiceError
+from coding_agent.security import WorkspacePolicy
 
 
 def _service(tmp_path, *, max_items=500, snapshot_items=8, snapshot_chars=6_000):

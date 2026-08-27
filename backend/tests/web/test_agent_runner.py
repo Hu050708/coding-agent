@@ -3,17 +3,17 @@ from __future__ import annotations
 import json
 import threading
 
-from clearloop.config import AppSettings
-from clearloop.memory import MemoryRepository, MemoryService
-from clearloop.runs import agent_runner as runner_module
-from clearloop.runs.agent_runner import AgentRunner, RunSpec
-from clearloop.core import (
+from coding_agent.config import AppSettings
+from coding_agent.memory import MemoryRepository, MemoryService
+from coding_agent.runs import agent_runner as runner_module
+from coding_agent.runs.agent_runner import AgentRunner, RunSpec
+from coding_agent.core import (
     AgentStatus,
     RunResult,
     TerminationReason,
     TokenUsage,
 )
-from clearloop.security import WorkspacePolicy
+from coding_agent.security import WorkspacePolicy
 
 
 class RecordingTrace:

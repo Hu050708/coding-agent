@@ -5,16 +5,16 @@ import threading
 
 import pytest
 
-from clearloop.config import AppSettings, SettingsError
-from clearloop.runs.event_buffer import EventBuffer
-from clearloop.runs.run_manager import BufferTrace
-from clearloop.security import WorkspacePolicy, WorkspacePolicyError
+from coding_agent.config import AppSettings, SettingsError
+from coding_agent.runs.event_buffer import EventBuffer
+from coding_agent.runs.run_manager import BufferTrace
+from coding_agent.security import WorkspacePolicy, WorkspacePolicyError
 
 
 def test_settings_load_env_file_without_exposing_secret(tmp_path):
     env_file = tmp_path / ".env"
     env_file.write_text(
-        f'DEEPSEEK_API_KEY="private-test-key"\nCLEARLOOP_ALLOWED_ROOT={tmp_path}\n',
+        f'DEEPSEEK_API_KEY="private-test-key"\nCODING_AGENT_ALLOWED_ROOT={tmp_path}\n',
         encoding="utf-8",
     )
 
@@ -35,8 +35,8 @@ def test_settings_accepts_explicit_memory_data_directory(tmp_path):
     settings = AppSettings.from_environment(
         {
             "DEEPSEEK_API_KEY": "test-key",
-            "CLEARLOOP_ALLOWED_ROOT": str(tmp_path),
-            "CLEARLOOP_DATA_DIR": str(data_dir),
+            "CODING_AGENT_ALLOWED_ROOT": str(tmp_path),
+            "CODING_AGENT_DATA_DIR": str(data_dir),
         },
         env_file=None,
     )
@@ -47,7 +47,7 @@ def test_settings_accepts_explicit_memory_data_directory(tmp_path):
 @pytest.mark.parametrize("data_dir", [".", "private-memory-data"])
 def test_settings_rejects_memory_data_inside_allowed_root(tmp_path, data_dir):
     target = tmp_path if data_dir == "." else tmp_path / data_dir
-    with pytest.raises(SettingsError, match="outside CLEARLOOP_ALLOWED_ROOT"):
+    with pytest.raises(SettingsError, match="outside CODING_AGENT_ALLOWED_ROOT"):
         AppSettings(api_key="x", allowed_root=tmp_path, data_dir=target)
 
 

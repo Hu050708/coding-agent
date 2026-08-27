@@ -7,11 +7,11 @@
 ## 画面与讲解
 
 1. **0–12 秒：任务与边界**
-   - 显示题目一句话和 ClearLoop README 标题。
+   - 显示题目一句话和 Coding Agent README 标题。
    - 讲：从零实现 coding-agent 循环，只用厂商底层 API 客户端，不用 Agent 框架或服务端工具。
 
 2. **12–30 秒：架构**
-   - 显示 `src/clearloop` 目录和 README 架构图。
+   - 显示 `src/coding_agent` 目录和 README 架构图。
    - 讲：core 维护历史、预算和终止；provider 只适配 DeepSeek；tools/security 本地校验执行；diagnostics 只写脱敏元数据。
 
 3. **30–78 秒：真实任务闭环（可加速）**

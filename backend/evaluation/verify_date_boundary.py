@@ -1,4 +1,4 @@
-"""Independent acceptance checks for the ClearLoop date-boundary demo.
+"""Independent acceptance checks for the Coding Agent date-boundary demo.
 
 Usage:
     python evaluation/verify_date_boundary.py PATH_TO_CANDIDATE
@@ -71,7 +71,7 @@ def check_candidate_tests(candidate: Path) -> CheckResult:
     # relying on the host user's shared temp directory.  On managed Windows
     # runners that directory can contain stale, unreadable pytest folders.
     with tempfile.TemporaryDirectory(
-        prefix="clearloop-pytest-",
+        prefix="coding-agent-pytest-",
         dir=candidate.parent,
     ) as raw_basetemp:
         completed = _run(
@@ -94,7 +94,7 @@ def check_candidate_tests(candidate: Path) -> CheckResult:
 
 def check_regression_test_added(candidate: Path) -> CheckResult:
     with tempfile.TemporaryDirectory(
-        prefix="clearloop-collect-",
+        prefix="coding-agent-collect-",
         dir=candidate.parent,
     ) as raw_basetemp:
         completed = _run(
@@ -207,7 +207,7 @@ def verify(candidate: Path) -> list[CheckResult]:
         check_candidate_tests(candidate),
         check_regression_test_added(candidate),
     ]
-    with tempfile.TemporaryDirectory(prefix="clearloop-evaluation-") as raw_directory:
+    with tempfile.TemporaryDirectory(prefix="coding-agent-evaluation-") as raw_directory:
         log_file = _write_hidden_log(Path(raw_directory))
         results.extend(
             [

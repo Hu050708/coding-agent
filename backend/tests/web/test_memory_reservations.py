@@ -5,9 +5,9 @@ import time
 
 import pytest
 
-from clearloop.runs.agent_runner import RunOutcome
-from clearloop.runs.run_manager import RunManager, RunManagerError
-from clearloop.security import WorkspacePolicy
+from coding_agent.runs.agent_runner import RunOutcome
+from coding_agent.runs.run_manager import RunManager, RunManagerError
+from coding_agent.security import WorkspacePolicy
 
 
 class HoldingRunner:

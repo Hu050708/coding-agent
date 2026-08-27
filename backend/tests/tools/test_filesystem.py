@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from clearloop.security import Workspace
-from clearloop.tools import ToolRegistry
+from coding_agent.security import Workspace
+from coding_agent.tools import ToolRegistry
 
 
 def decode(payload: str) -> dict:
@@ -65,7 +65,7 @@ def test_list_files_reports_link_without_following_it(tmp_path: Path) -> None:
 def test_list_files_has_independent_scan_limit_for_nonmatching_glob(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import clearloop.tools.filesystem as filesystem
+    import coding_agent.tools.filesystem as filesystem
 
     for index in range(5):
         (tmp_path / f"file-{index}.txt").write_text("x", encoding="utf-8")

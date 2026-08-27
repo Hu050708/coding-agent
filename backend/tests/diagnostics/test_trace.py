@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from clearloop.diagnostics import TraceWriter, summarize_argv
+from coding_agent.diagnostics import TraceWriter, summarize_argv
 
 
 def test_trace_uses_allowlist_and_removes_sensitive_fields(tmp_path):
@@ -51,7 +51,7 @@ def test_non_finite_numbers_are_rejected():
 
 def test_argv_summary_is_lossy():
     summary = summarize_argv(
-        [r"D:\\Anaconda\\envs\\clearloop-agent\\python.exe", "--token=very-secret", r"private\\source.py"]
+        [r"D:\\Anaconda\\envs\\coding-agent\\python.exe", "--token=very-secret", r"private\\source.py"]
     )
     assert "very-secret" not in summary
     assert "private" not in summary

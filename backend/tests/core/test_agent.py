@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from clearloop.core import (
+from coding_agent.core import (
     AdapterRequestError,
     Agent,
     AgentConfig,
@@ -18,8 +18,8 @@ from clearloop.core import (
     ToolExecutor,
     ToolRegistry,
 )
-from clearloop.core.agent import AgentStatus as AgentModuleStatus
-from clearloop.core.contracts import AgentStatus as ContractStatus
+from coding_agent.core.agent import AgentStatus as AgentModuleStatus
+from coding_agent.core.contracts import AgentStatus as ContractStatus
 
 
 class FakeAdapter:

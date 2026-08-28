@@ -1,3 +1,5 @@
+"""验证智能体状态机的预算、重试、工具调用和终止分支。"""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -5,10 +7,11 @@ import json
 
 import pytest
 
-from coding_agent.core import (
+from coding_agent.agents import (
     AdapterRequestError,
     Agent,
     AgentConfig,
+    AgentContextBuilder,
     AgentStatus,
     AssistantMessage,
     ModelCompletion,
@@ -18,8 +21,8 @@ from coding_agent.core import (
     ToolExecutor,
     ToolRegistry,
 )
-from coding_agent.core.agent import AgentStatus as AgentModuleStatus
-from coding_agent.core.contracts import AgentStatus as ContractStatus
+from coding_agent.agents.agent import AgentStatus as AgentModuleStatus
+from coding_agent.agents.contracts import AgentStatus as ContractStatus
 
 
 class FakeAdapter:
@@ -177,6 +180,40 @@ def test_agent_preserves_reasoning_and_tool_calls_across_rounds():
     assert "inspect and fix" not in serialized_trace
     assert "tool reasoning" not in serialized_trace
     assert '"path"' not in serialized_trace
+
+
+def test_agent_wraps_visible_context_as_untrusted_user_data_before_current_task():
+    adapter = FakeAdapter(final_completion())
+    context = AgentContextBuilder().build(
+        prior_messages=(
+            {"role": "user", "content": "earlier request"},
+            {"role": "assistant", "content": "earlier answer"},
+        )
+    )
+
+    result = make_agent(adapter).run("current request", context=context)
+
+    assert [message["role"] for message in adapter.calls[0]["messages"]] == [
+        "system",
+        "user",
+        "user",
+    ]
+    transcript = json.loads(adapter.calls[0]["messages"][1]["content"])
+    assert transcript["type"] == "coding_agent_visible_history"
+    assert transcript["messages"] == [
+        {"role": "user", "content": "earlier request"},
+        {"role": "assistant", "content": "earlier answer"},
+    ]
+    assert adapter.calls[0]["messages"][-1]["content"] == "current request"
+    assert result.messages[1:] == (
+        {"role": "user", "content": adapter.calls[0]["messages"][1]["content"]},
+        {"role": "user", "content": "current request"},
+        {
+            "role": "assistant",
+            "content": "done",
+            "reasoning_content": "final reasoning",
+        },
+    )
 
 
 def test_insufficient_system_resource_is_discarded_and_same_request_is_retried():
@@ -377,6 +414,7 @@ def test_unknown_model_tool_name_is_redacted_before_trace_emission():
 
 
 def test_same_round_tool_failure_does_not_cancel_later_tool_calls():
+    # 准备同一批次内“一次预期失败、一次成功”的工具注册表和模型响应。
     class MixedRegistry(FakeRegistry):
         schemas = [
             {"type": "function", "function": {"name": name, "parameters": {"type": "object"}}}
@@ -403,6 +441,7 @@ def test_same_round_tool_failure_does_not_cancel_later_tool_calls():
     adapter = FakeAdapter(completion, final_completion())
     registry = MixedRegistry()
 
+    # 执行后验证失败只作为工具结果进入历史，不会短路后续调用或整个运行。
     result = make_agent(adapter, registry).run("task")
 
     assert result.status is AgentStatus.MODEL_FINISHED
@@ -418,6 +457,38 @@ def test_same_round_tool_failure_does_not_cancel_later_tool_calls():
         "tool",
         "tool",
     ]
+
+
+def test_third_identical_tool_exchange_warns_model_without_changing_result_status():
+    completions = tuple(
+        tool_completion(call_id=f"repeat-{index}") for index in range(1, 4)
+    )
+    adapter = FakeAdapter(*completions, final_completion())
+    registry = FakeRegistry()
+    trace = RecordingTrace()
+
+    result = make_agent(adapter, registry, trace=trace).run("task")
+
+    assert result.status is AgentStatus.MODEL_FINISHED
+    tool_messages = [message for message in result.messages if message["role"] == "tool"]
+    assert len(tool_messages) == 3
+    first = json.loads(tool_messages[0]["content"])
+    second = json.loads(tool_messages[1]["content"])
+    third = json.loads(tool_messages[2]["content"])
+    assert first == second == {"ok": True, "data": {"text": "hello"}, "meta": {}}
+    assert third["ok"] is True
+    assert third["data"] == {"text": "hello"}
+    assert third["meta"]["progress_warning"]["code"] == "repeated_tool_exchange"
+    assert third["meta"]["progress_warning"]["repeat_count"] == 3
+    assert adapter.calls[3]["messages"][-1] == tool_messages[2]
+
+    completed = [fields for event, fields in trace.events if event == "tool_completed"]
+    assert "repeat_count" not in completed[0]
+    assert completed[1]["repeat_count"] == 2
+    assert completed[2]["repeat_count"] == 3
+    assert completed[2]["progress_warning"] is True
+    assert "path" not in repr(completed)
+    assert "hello" not in repr(completed)
 
 
 def test_retryable_request_error_retries_without_changing_history():

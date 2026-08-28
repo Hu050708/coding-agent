@@ -1,8 +1,7 @@
-"""Command-line composition root for Coding Agent.
+"""Coding Agent 命令行程序的组合入口。
 
-This module deliberately contains no agent-loop or tool business logic.  It
-parses configuration, wires the package boundaries together, and maps one run
-to a stable process exit code.
+本模块刻意不包含智能体循环或工具业务逻辑，只负责解析配置、连接各包边界，
+并将一次运行结果映射为稳定的进程退出码。
 """
 
 from __future__ import annotations
@@ -18,17 +17,17 @@ from typing import Any, Callable, TextIO
 from urllib.parse import urlsplit
 from uuid import uuid4
 
-from coding_agent.core import Agent, AgentConfig, AgentStatus
-from coding_agent.diagnostics import NullTrace, TraceWriter
-from coding_agent.providers import (
+from coding_agent.agents import Agent, AgentConfig, AgentStatus
+from coding_agent.agents.diagnostics import NullTrace, TraceWriter
+from coding_agent.agents.providers import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
     DEFAULT_TIMEOUT_SECONDS,
     DeepSeekAdapter,
 )
-from coding_agent.security import CommandRequest, Workspace, WorkspaceError
-from coding_agent.tools import ToolRegistry
+from coding_agent.agents.security import CommandRequest, Workspace, WorkspaceError
+from coding_agent.agents.tools import ToolRegistry
 
 
 EXIT_SUCCESS = 0
@@ -100,11 +99,13 @@ def _confirmation_callback(
     *, input_func: Callable[[str], str], stream: TextIO
 ) -> Callable[[CommandRequest], bool]:
     def confirm(request: CommandRequest) -> bool:
-        # JSON encoding prevents model-supplied control characters from being
-        # interpreted by the terminal. This is interactive-only and is never
-        # copied into the diagnostic trace.
-        display = json.dumps(list(request.argv), ensure_ascii=False)
-        stream.write(f"\nCommand requires approval: {display}\nReason: {request.reason}\n")
+        # JSON 编码可防止模型提供的控制字符被终端解释；该文本仅用于交互，
+        # 绝不会复制到诊断跟踪中。
+        if request.argv:
+            display = json.dumps(list(request.argv), ensure_ascii=False)
+        else:
+            display = request.action_summary
+        stream.write(f"\nOperation requires approval: {display}\nReason: {request.reason}\n")
         stream.flush()
         try:
             answer = input_func("Approve this command? [y/N] ")
@@ -124,7 +125,7 @@ def _safe_error(exc: BaseException, *, secret: str | None = None) -> str:
 
 
 def _terminal_safe(text: str) -> str:
-    """Escape terminal control characters while preserving normal text layout."""
+    """在保留普通文本布局的同时转义终端控制字符。"""
 
     rendered: list[str] = []
     for character in text:
@@ -146,6 +147,9 @@ def run_cli(
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
 ) -> int:
+    """装配并执行一次 CLI 运行，将所有终态映射为稳定输出和退出码。"""
+
+    # 第一步：在创建任何外部资源前校验密钥、任务和服务地址。
     environment = os.environ if environ is None else environ
     api_key = environment.get("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
@@ -163,9 +167,8 @@ def run_cli(
 
     try:
         workspace = Workspace(options.workspace)
-        # The same allowlisted JSON event is appended to disk and shown on
-        # stderr, so long API runs remain observable without leaking prompts,
-        # reasoning, file contents, or command output.
+        # 第二步：同一个白名单 JSON 事件会写入磁盘并显示到 stderr，使长时间 API
+        # 运行保持可观察，同时不泄露提示词、推理、文件内容或命令输出。
         trace = (
             NullTrace()
             if options.no_trace
@@ -191,6 +194,7 @@ def run_cli(
             api_timeout_seconds=options.api_timeout,
             max_transient_retries=options.retries,
         )
+        # 第三步：完成边界装配后执行同步智能体，并统一捕获启动及配置错误。
         result = Agent(adapter, registry, config=config, trace=trace).run(options.task)
     except KeyboardInterrupt:
         stderr.write("Cancelled by user.\n")
@@ -202,6 +206,7 @@ def run_cli(
         stderr.write(f"Startup failure: {_safe_error(exc, secret=api_key)}\n")
         return EXIT_RUN_FAILED
 
+    # 第四步：仅向 stdout 输出终端安全的最终内容，摘要和状态写入 stderr。
     if result.final_content:
         stdout.write(_terminal_safe(result.final_content.rstrip()) + "\n")
     status = result.status.value if hasattr(result.status, "value") else str(result.status)

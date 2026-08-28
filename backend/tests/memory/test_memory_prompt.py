@@ -1,9 +1,11 @@
+"""验证项目记忆在提示词中的边界标记和转义。"""
+
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
 
-from coding_agent.memory import (
+from coding_agent.agents.memory import (
     MemoryEntry,
     MemoryKind,
     MemoryPromptBuilder,

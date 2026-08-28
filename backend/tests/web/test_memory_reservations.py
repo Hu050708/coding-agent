@@ -1,3 +1,5 @@
+"""验证记忆变更与同工作区运行之间的互斥预留。"""
+
 from __future__ import annotations
 
 import threading
@@ -5,9 +7,9 @@ import time
 
 import pytest
 
-from coding_agent.runs.agent_runner import RunOutcome
-from coding_agent.runs.run_manager import RunManager, RunManagerError
-from coding_agent.security import WorkspacePolicy
+from coding_agent.agents.runtime.agent_runner import RunOutcome
+from coding_agent.agents.runtime.run_manager import RunManager, RunManagerError
+from coding_agent.agents.security import WorkspacePolicy
 
 
 class HoldingRunner:
@@ -111,7 +113,7 @@ def test_mutation_reservation_blocks_run_and_releases_after_exception(tmp_path):
                     manager.create(workspace=str(workspace), task="must not start")
                 assert blocked.value.code == "memory_mutation_in_progress"
 
-                # Reservations are workspace-scoped, not a global write lock.
+    # 预留以工作区为范围，并非全局写锁。
                 other_run = manager.create(workspace=str(other), task="allowed")
                 assert other_run["run_id"]
                 raise RuntimeError("service failed")
@@ -125,6 +127,7 @@ def test_mutation_reservation_blocks_run_and_releases_after_exception(tmp_path):
 
 
 def test_run_create_and_memory_reservation_race_has_exactly_one_winner(tmp_path):
+    # 用屏障让运行创建和记忆变更同时竞争同一工作区预留。
     workspace = tmp_path / "project"
     workspace.mkdir()
     runner = HoldingRunner()
@@ -159,6 +162,7 @@ def test_run_create_and_memory_reservation_race_has_exactly_one_winner(tmp_path)
         finally:
             other_attempt_finished.set()
 
+    # 两个线程无论谁获胜，另一个都必须快速收到与当前占位对应的稳定冲突码。
     mutation_thread = threading.Thread(target=mutate)
     run_thread = threading.Thread(target=create_run)
     try:

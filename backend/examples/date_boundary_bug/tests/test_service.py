@@ -1,3 +1,5 @@
+"""验证日期边界示例的过滤和汇总规则。"""
+
 from datetime import datetime
 
 from logstats.models import LogRecord

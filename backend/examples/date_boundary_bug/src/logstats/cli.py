@@ -1,4 +1,4 @@
-"""Command-line interface for logstats."""
+"""logstats 示例程序的命令行接口。"""
 
 from __future__ import annotations
 

@@ -1,10 +1,10 @@
-# Coding Agent 编程智能体设计（v0.4，实现态）
+# Coding Agent 编程智能体设计（v0.5，实现态）
 
 日期：2026-08-27<br>
-状态：核心闭环、FastAPI/Vue WebUI 与第一版项目记忆已完成集成验证<br>
+状态：核心闭环、FastAPI/Vue 会话工作台、三档权限与 PostgreSQL 持久化已实现<br>
 原则：先证明一个最小闭环真实、可靠、合规，再增加功能。`Coding Agent` 表示核心循环透明、可观察、可解释。
 
-v0.4 在不改变题目要求的自研 Agent 核心前提下增加了本机 WebUI 和项目记忆。仓库根层
+v0.5 在不改变题目要求的自研 Agent 核心前提下增加了本机 WebUI、持久会话和项目记忆。仓库根层
 只保留 `backend/`、`frontend/` 两个业务目录；Python 代码统一使用 `coding_agent` 命名空间。
 Web 与记忆是核心循环之外的适配/编排能力，不替模型解析工具，也不替 Agent 执行状态机。
 
@@ -37,6 +37,7 @@ Web 与记忆是核心循环之外的适配/编排能力，不替模型解析工
 - Chat Completions 支持思考模式和 function tool calls。
 - 思考模式默认开启，默认 effort 为 `high`。
 - 请求携带 `tools` 时，后续请求必须完整回传此前 assistant 的 `reasoning_content`，否则会返回 400。
+- V4 thinking + tools 不支持 `tool_choice`，且回放的 tool-call assistant 消息必须有非 `null` 的 `content` 字段。
 - 普通 tool calling 仍可能生成非法 JSON、额外字段或错误类型，必须本地校验。
 - `/beta` strict mode 只支持 JSON Schema 子集，不作为首版可靠性或安全边界。
 
@@ -63,10 +64,11 @@ Web 与记忆是核心循环之外的适配/编排能力，不替模型解析工
 | strict | 不使用 `/beta` | 始终本地校验，避免 beta 依赖 |
 | 流式 | 不做 | 避免拼装流式 reasoning/tool-call 增量 |
 | 命令 | `shell=False`、argv 数组、策略分级 | 不支持管道、重定向和复合 shell |
-| 上下文 | 完整保留，限制工具输出和总预算 | 不裁剪 thinking 历史，避免协议冲突 |
+| 上下文 | 完整保留本次运行历史 | 通过有限轮次、token 预算和工具输出限长控制规模 |
 | 目标平台 | 当前 Windows 主机（build 22000）实测 | POSIX 仅 best effort，不作放行承诺 |
 | 界面 | CLI + 本机 FastAPI/Vue WebUI | 前后端分离，仅绑定 loopback，不改变 Agent 核心协议 |
-| 记忆 | 工作区级 SQLite + 手动确认写入 | 新任务自动读取一次；不允许模型自行持久化 |
+| 持久化 | 独立 loopback PostgreSQL + SQLAlchemy/Alembic | Web 强制使用；CLI 保持数据库独立 |
+| 记忆 | 工作区级 PostgreSQL + 手动确认写入 | 每次运行冻结实际送模集合；不允许模型自行持久化 |
 
 只调用：
 
@@ -83,28 +85,25 @@ model="deepseek-v4-flash"
 reasoning_effort="high"
 extra_body={"thinking": {"type": "enabled"}}
 tools=<本地函数 schema>
-tool_choice="auto"
-max_tokens=<联调后冻结的 8192 或 16384>
+max_tokens=8192
 ```
 
-思考模式下不发送会被静默忽略的 `temperature`、`top_p`、`presence_penalty` 或 `frequency_penalty`。
+思考模式下不发送不兼容的 `tool_choice`，也不发送会被静默忽略的 `temperature`、`top_p`、`presence_penalty` 或 `frequency_penalty`。
 
 ## 4. 最小架构
 
 ```text
-CLI / FastAPI + Run Manager
-    |
-    +------> Workspace Memory (SQLite -> immutable prompt snapshot)
-    |
-    v
-Agent Controller <------> DeepSeek Adapter <------> Chat Completions
-    |
-    +------> Tool Registry / Validation
-    |               |
-    |               +--> Workspace file tools
-    |               `--> Controlled process tool
-    |
-    `------> Diagnostic JSONL / safe SSE events
+CLI ----------------------------------------------+
+                                                   v
+Vue -> FastAPI -> Application Services -> Run Manager -> Agent Controller
+                    |                    |                |         |
+                    v                    v                |         `-> DeepSeek
+              Persistence         safe SSE notify        v
+                    |                              Tool Registry / Policy
+                    v
+              PostgreSQL
+              workspace / conversation / visible message / run /
+              safe event / approval / workspace memory
 ```
 
 模块按职责分包，但不机械地为每个类建目录：
@@ -113,54 +112,66 @@ Agent Controller <------> DeepSeek Adapter <------> Chat Completions
 backend/src/coding_agent/
   cli.py                    # 薄组合根：参数、配置、确认、退出码
   main.py / web.py          # FastAPI 组合根和 loopback Web 入口
-  api/                      # HTTP schema、路由、错误和依赖
-  runs/                     # 运行生命周期、审批、取消和 SSE
-  memory/                   # SQLite 仓储、领域服务、检索和提示构造
-  core/
+  settings/settings.py      # 环境变量、.env 和运行参数
+  router/                   # FastAPI 路由和 HTTP 错误映射
+  schemas/                  # HTTP 请求与响应模型
+  dependencies/             # FastAPI 依赖函数
+  services/                 # 工作区、会话、运行和记忆用例
+  models/                   # SQLAlchemy 模型与持久化枚举
+  repository/               # 仓储、DTO、事务门面和安全事件
+  database/                 # 连接、迁移和启动恢复
+  agents/
     contracts.py            # 值对象、预算配置和依赖端口
+    context.py              # 有界可见历史与不可变记忆上下文
+    progress.py             # 完全重复工具交换的有界哈希检测
     tool_protocol.py        # 严格 JSON 与工具结果协议
     agent.py                # 状态机、消息历史和终止循环
-  providers/
-    deepseek.py             # API 请求、响应规范化、错误分类
-  tools/
-    contracts.py            # 工具错误与参数校验合同
-    schemas.py              # 五个 function schema
-    registry.py             # 工具分发
-    filesystem.py           # list/read/create/replace
-    command.py              # 受控进程执行
-  security/
-    command_policy.py       # 命令分级与环境变量策略
-    workspace.py            # 路径、受保护文件、原子 IO 与策略 façade
-    workspace_policy.py     # Web 运行与记忆共用的允许根目录策略
-  diagnostics/
-    trace.py                # 简单的脱敏 JSONL emit()
+    providers/deepseek.py   # API 请求、响应规范化、错误分类
+    tools/                  # 六个工具的 schema、分发与实现
+    security/               # 工作区、命令分级和三档权限
+    runtime/                # 运行生命周期、审批、取消和实时事件
+    memory/                 # Agent 记忆值、提示合同和 CLI 记忆服务
+    diagnostics/trace.py    # 简单的脱敏 JSONL emit()
 ```
 
-`core` 只依赖 adapter/registry Protocol，不导入 OpenAI SDK、Web、记忆或工具具体实现；
-`providers` 和 `tools` 分别实现这些端口，CLI/FastAPI 负责装配。测试目录镜像源码职责边界，
+`agents/` 根部的循环只依赖 adapter/registry Protocol，不导入 OpenAI SDK、Web 或工具具体实现；
+`agents/providers` 和 `agents/tools` 分别实现这些端口，CLI/FastAPI 负责装配。测试目录镜像源码职责边界，
 并另设 live integration 和端到端测试；不为每个概念建立额外生产模块。
 
 ### 4.1 Web 运行边界
 
 - FastAPI 只绑定 `127.0.0.1`，Vue 开发服务器通过同源 `/api` 代理访问后端。
-- `RunManager` 在受控线程池中维护运行、工作区互斥、容量、取消和命令审批。
-- SSE 使用有界可重放事件缓冲；公开字段采用 allowlist，不发送任务、推理、工具正文或记忆正文。
-- 前端按 `app / features / shared` 分层，运行控制与项目记忆各自拥有类型、API、状态和组件。
+- Web 强制使用独立 PostgreSQL：容器 `coding-agent-postgres`、卷
+  `coding_agent_postgres_data`、loopback 端口 `5434`。启动时自动执行 Alembic 迁移；连接或迁移失败
+  直接阻止 Web 启动，不回退 SQLite。开发启动顺序固定为 Compose PostgreSQL、FastAPI、Vue；
+  CLI 不依赖数据库或 Web。
+- PostgreSQL 持久化 workspace、conversation、可见 user/assistant message、run、白名单 event、
+  approval 和 memory。隐藏推理、原始提供方响应、环境变量和完整工具输出没有持久化字段。
+- `RunManager` 只在进程内执行活动任务、取消和审批；同一工作区由数据库部分唯一索引和事务锁保证
+  最多一个活动 run，不同工作区可以并行。
+- SSE 先按 `Last-Event-ID` 从 PostgreSQL 重放，再用进程内通知降低实时延迟。重启时未完成 run 被标为
+  `interrupted` 并追加可重放事件，而不是伪装成可恢复执行。
+- 每个 run 冻结一种后端权限：`ask` 对文件修改和命令逐次审批；`agent` 自动执行工作区修改和
+  常规检查，只审批风险命令；`workspace_full` 自动执行工作区内所有非禁止操作。所有模式始终
+  拒绝越界路径和 `DENY` 命令。
+- 前端按 `app / features / shared` 分层，并使用 Vue Router + Pinia；workspace、conversation、chat、
+  run、permission、memory 各自拥有类型、API、状态和组件。
 
 ### 4.2 第一版项目记忆边界
 
-- 作用域只有“规范化后的同一工作区”，隔离键是规范路径的 SHA-256；不做跨项目或用户画像。
-- SQLite 默认位于 `%LOCALAPPDATA%\Coding Agent\coding-agent.db`，并强制
-  `CODING_AGENT_DATA_DIR` 位于 `CODING_AGENT_ALLOWED_ROOT` 之外，不放入 Agent 可操作的工作区。
-- 每次运行开始只读取一次不可变快照：启用项按置顶、与当前任务的中英文相关度、更新时间排序，
-  最多 8 条且正文总计不超过 6000 字符。
-- 记忆正文作为普通 user JSON 中的不可信参考资料，当前任务放在最后；固定 system policy 明确
-  它不能覆盖当前任务、安全策略、审批、预算或工作区边界，并要求重新核验。
+- 作用域只有数据库登记且规范化后的同一 workspace；不做跨项目或用户画像。
+- workspace、conversation、可见消息和 memory 都在 PostgreSQL 中，但会话历史与工作区记忆是两类
+  数据：历史只在当前 conversation 回放，memory 才能在同一 workspace 的不同 conversation 共享。
+- 创建 run、写入当前 user message、截取可见历史并冻结 memory 在一个事务内完成。最终快照按置顶和
+  更新时间排序，最多 32 条且正文总计不超过 32000 字符；`run_memories` 就是实际送给模型的集合。
+- 记忆正文与当前任务一起序列化为普通 user JSON，当前任务固定放在最后。
 - 只有显式 API/UI 操作才能新增、编辑、置顶、停用、删除或清空；运行结果保存前必须可编辑确认。
-  模型没有保存记忆的工具，也不持久化推理、消息历史、工具输入输出、源码、完整任务或密钥。
-- 同一工作区的活动运行与记忆写操作通过原子 reservation 双向互斥，避免运行中的代码调用本机 API
-  绕过人工确认；读取列表不受此限制。运行结果来源只接受同工作区且状态为 `completed` 的保留运行。
-- 数据库异常时，记忆 CRUD 返回结构化 503；普通 Agent 运行降级为 `memory=unavailable`，不失败。
+  模型没有保存记忆的工具；数据库只保存用户可见消息，不保存推理、原始工具结果或密钥。
+- memory 写操作和 run 创建都先锁 workspace，固定 `workspace -> conversation -> run` 顺序；同一
+  workspace 有活动 run 时，新增、编辑、删除和清空全部拒绝。运行结果来源只接受同 workspace 且
+  状态为 `completed` 的 run。
+- 首版不使用 embedding 或 pgvector 检索。PostgreSQL 是 Web 的强依赖；数据库异常会返回结构化错误
+  或阻止启动，不声称在持久化失效后仍能维持 Web 会话一致性。
 
 ## 5. 状态机与协议不变量
 
@@ -180,6 +191,7 @@ INITIALIZING
 ```text
 加入 system 和 user task
 while 预算未耗尽:
+    检查剩余时间/token预算
     检查完整历史和剩余时间/token预算
     请求 DeepSeek
     校验 choice、finish_reason 和消息字段，暂不提交到对话历史
@@ -203,9 +215,10 @@ while 预算未耗尽:
 2. 下一次模型请求前，同轮全部 tool calls 都必须获得执行、拒绝或取消结果。
 3. 普通工具失败不取消其他独立调用；只有用户取消、全局预算耗尽或致命策略决定才取消剩余调用。
 4. 工具参数必须是严格 JSON object；拒绝数组、标量、未知字段、重复 ID、`NaN` 和 `Infinity`。
-5. thinking 开启且响应含 `reasoning_content` 时，按原样保存在 assistant 消息并回传；不显示、不写事件日志。
+5. thinking tool turn 的 `reasoning_content` 按原样保存在 assistant 消息并回传；不显示、不写事件日志。API 返回的 tool-call `content=null` 在回放时规范化为 `""`。
 6. assistant 中的 `content`、`reasoning_content` 和全部 `tool_calls` 均由项目显式序列化，不能依赖 SDK 对额外字段的隐式保留。
 7. 多工具调用只按顺序执行，不并发。修改工具带乐观并发 hash；状态改变后不满足 hash 的后续写操作会失败并要求模型重读。
+8. 工具名、规范化参数和去除耗时字段后的结果连续三次完全相同时，只向第三次结果附加恢复提示；不修改原结果状态，也不提前终止运行。
 
 ### 5.1 `finish_reason` 决策表
 
@@ -270,7 +283,10 @@ while 预算未耗尽:
 
 ### 6.2 P1 工具
 
-`search_text` 只有在 P0 提前稳定时加入。否则模型使用 `list_files` + 分段 `read_file`，或经策略允许的 `rg` 命令。
+`search_text` 已作为第六个工具实现。它在工作区 UTF-8 文件中执行单行字面文本搜索，支持相对目录、
+glob、大小写开关、结果上限和最多三行上下文。扫描文件数、总字节数、单文件大小和输出字符数均有
+独立上限；稳定排序，不跟随目录链接，并复用 `Workspace` 的受保护路径规则。它不通过 shell 或
+外部 `rg` 执行，在三档权限中均属于自动执行的只读工具。
 
 ## 7. Windows 路径与受保护文件
 
@@ -311,14 +327,14 @@ while 预算未耗尽:
 
 ## 9. 上下文、预算和终止
 
-首版不做运行中历史裁剪。原因：DeepSeek thinking + tools 要求完整回传此前 assistant reasoning；1M context、有限轮次和工具输出硬限长足以覆盖正式演示。
+本次运行的 system、user、assistant 和 tool 历史完整保留。上下文规模通过有限模型轮次、有限工具轮次、工具输出限长和 API 返回的 token 总预算控制，不做动态摘要或复杂裁剪。
 
 上下文管理包括：
 
-1. 完整保存 system、user、assistant 和 tool 消息。
+1. 持久可见历史以一条紧凑 JSON user 消息加入上下文；本次运行完整保存 system、user、assistant 和 tool 消息。
 2. 单个文件、搜索结果和命令输出硬限长。
 3. 每次模型响应后累计 API 返回的 `usage`；首版不引入本地 tokenizer，也不在请求前伪造精度不明的 token 估算。
-4. 达到已观测的累计 token 硬上限时停止；提供方上下文错误按脱敏 API 错误处理，不拆消息、不伪造摘要。
+4. 达到已观测的累计 token 硬上限时停止；提供方上下文错误按 API 错误处理。
 5. 模型调用、工具调用、总时间和单工具均有硬预算。
 
 候选默认值先按演示规模保守设定，并在正式录制前用 D1-D3 live test 复核：
@@ -362,7 +378,9 @@ while 预算未耗尽:
 
 - 非法 JSON、未知工具、字段错误、路径越界、被拒命令、非零退出码均作为结构化 tool result 回填，允许模型自纠。
 - 有副作用的工具不由控制器盲目自动重试。
-- P0 不实现复杂无进展检测；硬轮次/工具/时间预算保证最终终止。
+- 当前只检测可证明的“完全重复工具交换”，不声称理解任务是否取得语义进展。检测器仅保存最多
+  128 个 SHA-256 指纹，不保留参数或结果正文；从第三次相同交换开始附加 `progress_warning`，提示
+  模型改变策略。它不会自动重试、抑制工具或终止运行，最终停止仍由硬轮次、工具、token 和时间预算保证。
 
 ## 11. 诊断事件，而非安全审计日志
 
@@ -440,8 +458,9 @@ P1：在固定日期、模型别名和配置下观察到 8/10，并分别报告�
 ## 13. 依赖和环境
 
 Agent 核心的唯一第三方运行依赖是已验证并固定版本的 `openai`。Web extra 固定
-`fastapi` 与 `uvicorn`，SQLite 使用 Python 标准库，不增加 ORM、向量库或 embedding 服务。
-前端运行依赖只有 Vue，构建与测试依赖由 `frontend/package-lock.json` 固定。
+`fastapi`、`uvicorn`、`sqlalchemy`、`psycopg` 与 `alembic`；数据库镜像采用 PostgreSQL 17
+的 pgvector 发行镜像，但首版不创建向量列、不启用 embedding 或向量检索。前端使用 Vue、
+Vue Router 与 Pinia，完整构建/测试依赖由 `frontend/package-lock.json` 固定。
 
 依赖单一真源为 `pyproject.toml`。`environment.yml` 只创建 Python 3.11 + pip 并从当前项目安装 editable 依赖，避免同时维护两套版本号。
 
@@ -511,8 +530,8 @@ API key 不提供命令行参数。Web 服务从进程环境或本机 `backend/.
 
 ### P1（仅在 P0 提前稳定后）
 
-- `search_text`；
-- 简单重复调用检测；
+- 已实现 `search_text`；
+- 已实现完全重复工具交换的建议性检测；
 - 更丰富 token/成本统计；
 - Windows 子进程树和 junction 的更多测试；
 - 第二个真实任务；
@@ -524,7 +543,7 @@ API key 不提供命令行参数。Web 服务从进程环境或本机 `backend/.
 - 面向公网、多用户或带账户体系的 Web 服务，以及复杂 TUI；
 - RAG、向量检索、模型自动写入记忆、MCP、插件和浏览器；
 - Responses API 托管工具、Files API、Code Interpreter；
-- 动态上下文摘要/裁剪，以及后端重启后的运行会话恢复；
+- 模型生成的动态摘要，以及后端重启后继续执行中断的 run；持久会话和事件可以查看，但不恢复进程；
 - streaming tool-call 拼装；
 - 多模型自动路由和自动切换；
 - 自动 Git commit/push；
@@ -534,7 +553,7 @@ API key 不提供命令行参数。Web 服务从进程环境或本机 `backend/.
 
 ## 17. 已确认事项与后续输入
 
-1. 项目名 `Coding Agent`、发行包/未来仓库名 `coding-agent`、Conda 环境名 `coding-agent` 已确认；当前本地根目录在本阶段不移动。
-2. 用户自行处理 GitHub 仓库与上传；当前实现过程不执行任何 Git 操作。
+1. 项目名 `Coding Agent`、发行包/仓库根目录名、Conda 环境名均为 `coding-agent`。
+2. GitHub 远端仓库与最终上传由用户处理；开发阶段只维护本地提交，Agent 和 Web 运行流程不执行 Git 远端操作。
 3. DeepSeek 账号已有可用 API key 和余额；key 不通过聊天发送，真实联调时只从本机环境变量读取。
 4. 最终 ZIP 使用的真实姓名在提交阶段再提供。

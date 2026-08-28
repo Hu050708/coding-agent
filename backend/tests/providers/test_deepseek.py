@@ -1,3 +1,5 @@
+"""验证 DeepSeek 响应规范化、错误分类和请求参数。"""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -8,8 +10,8 @@ import pytest
 from openai import OpenAI
 from openai.types.chat import ChatCompletion
 
-from coding_agent.core import AdapterProtocolError, AdapterRequestError
-from coding_agent.providers.deepseek import DeepSeekAdapter, normalize_completion
+from coding_agent.agents import AdapterProtocolError, AdapterRequestError
+from coding_agent.agents.providers.deepseek import DeepSeekAdapter, normalize_completion
 
 
 class FakeCompletions:
@@ -113,7 +115,6 @@ def test_adapter_uses_only_fixed_chat_completions_parameters():
         "model": "deepseek-v4-flash",
         "messages": messages,
         "tools": tools,
-        "tool_choice": "auto",
         "stream": False,
         "reasoning_effort": "high",
         "extra_body": {"thinking": {"type": "enabled"}},
@@ -126,7 +127,7 @@ def test_adapter_uses_only_fixed_chat_completions_parameters():
     assert completion.assistant.reasoning_content == "private reasoning"
     assert completion.assistant.as_history_dict() == {
         "role": "assistant",
-        "content": None,
+        "content": "",
         "reasoning_content": "private reasoning",
         "tool_calls": [
             {
@@ -187,7 +188,7 @@ def test_openai_sdk_wire_json_preserves_deepseek_reasoning_and_tools():
     messages = [
         {
             "role": "assistant",
-            "content": None,
+            "content": "",
             "reasoning_content": "history reasoning",
             "tool_calls": [
                 {
@@ -215,7 +216,7 @@ def test_openai_sdk_wire_json_preserves_deepseek_reasoning_and_tools():
     assert captured["tools"] == tools
     assert captured["thinking"] == {"type": "enabled"}
     assert captured["reasoning_effort"] == "high"
-    assert captured["tool_choice"] == "auto"
+    assert "tool_choice" not in captured
     assert captured["stream"] is False
     assert captured["max_tokens"] == 8192
     assert "extra_body" not in captured
@@ -260,7 +261,6 @@ def test_malformed_success_response_is_a_protocol_error():
     )
     with pytest.raises(AdapterProtocolError, match="only function"):
         normalize_completion(malformed_call)
-
 
 class FakeHTTPFailure(RuntimeError):
     def __init__(self, status_code):

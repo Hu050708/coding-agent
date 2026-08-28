@@ -1,3 +1,5 @@
+"""验证日期边界示例程序的命令行 JSON 输出。"""
+
 import json
 
 from logstats.cli import main

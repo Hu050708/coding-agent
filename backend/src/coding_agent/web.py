@@ -1,4 +1,4 @@
-"""Command-line entry point for the local Coding Agent Web API."""
+"""本地 Coding Agent Web API 的命令行入口。"""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from coding_agent.main import serve
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """Build the deliberately small server command-line interface."""
+    """构建刻意精简的服务端命令行接口。"""
 
     return argparse.ArgumentParser(
         prog="coding-agent-web",
@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """Validate command-line arguments, then start the supported server."""
+    """校验命令行参数后启动受支持的服务器。"""
 
     build_parser().parse_args(argv)
     serve()

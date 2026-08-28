@@ -1,11 +1,10 @@
-"""Independent acceptance checks for the Coding Agent date-boundary demo.
+"""对 Coding Agent 日期边界演示执行独立验收检查。
 
-Usage:
+用法：
     python evaluation/verify_date_boundary.py PATH_TO_CANDIDATE
 
-The candidate directory is expected to contain ``src/logstats`` and ``tests``.
-Hidden fixtures are created outside that directory and exercised through the
-public CLI, so they are never placed in the agent's workspace.
+候选目录应包含 ``src/logstats`` 和 ``tests``。隐藏夹具创建在该目录之外，并通过
+公共 CLI 执行，因此不会被放入智能体工作区。
 """
 
 from __future__ import annotations
@@ -67,13 +66,11 @@ def _run(
 
 
 def check_candidate_tests(candidate: Path) -> CheckResult:
-    # Keep pytest's temporary tree beside the isolated candidate instead of
-    # relying on the host user's shared temp directory.  On managed Windows
-    # runners that directory can contain stale, unreadable pytest folders.
-    with tempfile.TemporaryDirectory(
-        prefix="coding-agent-pytest-",
-        dir=candidate.parent,
-    ) as raw_basetemp:
+    """在候选目录外运行其测试套件，隔离 pytest 临时状态。"""
+
+    # 使用候选工作区外的全新系统临时目录，使智能体无法访问隐藏评测状态，
+    # 同时兼容只读的基线或示例父目录。
+    with tempfile.TemporaryDirectory(prefix="coding-agent-pytest-") as raw_basetemp:
         completed = _run(
             [
                 sys.executable,
@@ -93,10 +90,7 @@ def check_candidate_tests(candidate: Path) -> CheckResult:
 
 
 def check_regression_test_added(candidate: Path) -> CheckResult:
-    with tempfile.TemporaryDirectory(
-        prefix="coding-agent-collect-",
-        dir=candidate.parent,
-    ) as raw_basetemp:
+    with tempfile.TemporaryDirectory(prefix="coding-agent-collect-") as raw_basetemp:
         completed = _run(
             [
                 sys.executable,
@@ -120,8 +114,8 @@ def check_regression_test_added(candidate: Path) -> CheckResult:
     if summary_match is not None:
         count = int(summary_match.group(1))
     else:
-        # With the candidate's quiet pytest configuration, collection is
-        # rendered as one ``path: count`` line per test module and no summary.
+        # 候选项目启用 pytest 静默配置时，收集结果可能只有逐模块的 ``path: count``，
+        # 不包含总数摘要，因此需要兼容两种格式。
         module_counts = re.findall(r"(?m)^.+:\s+(\d+)\s*$", output)
         count = sum(int(value) for value in module_counts)
     if count == 0:
@@ -197,16 +191,21 @@ def check_unfiltered_behavior(candidate: Path, log_file: Path) -> CheckResult:
 
 
 def verify(candidate: Path) -> list[CheckResult]:
+    """依次执行可见测试、回归测试检查和隐藏边界行为验收。"""
+
+    # 第一步：先验证候选结构，缺少必要目录时无需启动任何子进程。
     candidate = candidate.resolve()
     required = [candidate / "src" / "logstats", candidate / "tests"]
     missing = [str(path) for path in required if not path.exists()]
     if missing:
         return [CheckResult("candidate layout", False, f"missing: {', '.join(missing)}")]
 
+    # 第二步：运行候选自带测试并确认其新增了回归用例。
     results = [
         check_candidate_tests(candidate),
         check_regression_test_added(candidate),
     ]
+    # 第三步：在候选目录外生成隐藏日志，验证日期末端边界和未过滤行为。
     with tempfile.TemporaryDirectory(prefix="coding-agent-evaluation-") as raw_directory:
         log_file = _write_hidden_log(Path(raw_directory))
         results.extend(

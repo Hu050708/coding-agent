@@ -1,4 +1,4 @@
-"""FastAPI composition root for the local-only Coding Agent Web service."""
+"""仅限本地访问的 Coding Agent Web 服务 FastAPI 组合入口。"""
 
 from __future__ import annotations
 
@@ -10,13 +10,20 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from coding_agent.api.errors import install_error_handlers
-from coding_agent.api.routes import api_router
-from coding_agent.config import AppSettings
-from coding_agent.memory import MemoryRepository, MemoryService
-from coding_agent.runs.agent_runner import AgentRunner, AgentRunnerProtocol
-from coding_agent.runs.run_manager import RunManager
-from coding_agent.security import WorkspacePolicy
+from coding_agent.services import ApplicationServices
+from coding_agent.router.errors import install_error_handlers
+from coding_agent.router import api_router
+from coding_agent.settings import AppSettings, SettingsError
+from coding_agent.database import (
+    Database,
+    create_database,
+    interrupt_stale_runs,
+    upgrade_database,
+)
+from coding_agent.repository import PersistenceService
+from coding_agent.agents.runtime.agent_runner import AgentRunner, AgentRunnerProtocol
+from coding_agent.agents.runtime.run_manager import RunManager
+from coding_agent.agents.security import WorkspacePolicy
 
 
 def _origin_is_local(origin: str) -> bool:
@@ -36,28 +43,39 @@ def create_app(
     settings: AppSettings | None = None,
     runner: AgentRunnerProtocol | None = None,
     manager: RunManager | None = None,
-    memory_service: MemoryService | None = None,
+    database: Database | None = None,
+    persistence: PersistenceService | None = None,
+    migrate_database: bool = True,
 ) -> FastAPI:
-    """Build an app with injectable runner/manager boundaries for offline tests."""
+    """构建可注入运行器和管理器边界的应用，便于离线测试。"""
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # 第一步：加载配置，迁移并检查数据库；注入对象则保留其所有权给调用方。
         effective_settings = settings or AppSettings.from_environment()
         workspace_policy = WorkspacePolicy(effective_settings.allowed_root)
-        effective_memory_service = memory_service
-        if effective_memory_service is None:
+        effective_database = database
+        owns_database = effective_database is None
+        if effective_database is None:
+            if not effective_settings.database_configured:
+                raise SettingsError(
+                    "CODING_AGENT_DATABASE_URL is required for Coding Agent Web."
+                )
             try:
-                repository = MemoryRepository(effective_settings.data_dir / "coding-agent.db")
-                repository.initialize()
-                effective_memory_service = MemoryService(repository, workspace_policy)
+                if migrate_database:
+                    upgrade_database(effective_settings.database_url)
+                effective_database = create_database(effective_settings.database_url)
+                effective_database.healthcheck()
             except Exception:
-                # Memory is an optional local aid. Keep normal runs available if
-                # its separate store cannot be initialized.
-                effective_memory_service = None
-        effective_runner = runner or AgentRunner(
-            effective_settings,
-            memory_service=effective_memory_service,
+                raise RuntimeError(
+                    "The Coding Agent PostgreSQL database is unavailable or not migrated."
+                ) from None
+        # 第二步：修复重启前遗留运行，再依次装配持久化、运行管理和应用服务。
+        effective_persistence = persistence or PersistenceService(
+            effective_database.session_factory
         )
+        interrupt_stale_runs(effective_database.session_factory)
+        effective_runner = runner or AgentRunner(effective_settings)
         owns_manager = manager is None
         effective_manager = manager or RunManager(
             runner=effective_runner,
@@ -72,14 +90,24 @@ def create_app(
             run_deadline_seconds=effective_settings.wall_time_seconds,
         )
         app.state.settings = effective_settings
+        app.state.database = effective_database
+        app.state.persistence = effective_persistence
         app.state.run_manager = effective_manager
-        app.state.memory_service = effective_memory_service
+        app.state.services = ApplicationServices.build(
+            persistence=effective_persistence,
+            manager=effective_manager,
+            workspace_policy=workspace_policy,
+        )
+        # 第三步：所有依赖挂载到 app.state 后才开始接收请求。
         yield
         if owns_manager:
-            # Cancellation is cooperative. Do not block the ASGI shutdown loop
-            # while an in-flight provider request waits for its bounded timeout.
-            effective_manager.shutdown(wait=False)
+            # 取消是协作式的，因此需先排空有界工作线程，再释放其终态回调使用的数据库；
+            # 请求超时和运行墙钟预算共同限制这里的等待时间。
+            effective_manager.shutdown(wait=True)
+        if owns_database:
+            effective_database.dispose()
 
+    # 第四步：配置仅限本机的主机校验、来源检查和浏览器安全响应头。
     application = FastAPI(
         title="Coding Agent Web API",
         version="0.1.0",
@@ -127,7 +155,7 @@ app = create_app()
 
 
 def serve() -> None:
-    """Run the supported single-process, loopback-only development server."""
+    """运行受支持的单进程、仅回环地址开发服务器。"""
 
     import uvicorn
 

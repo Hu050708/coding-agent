@@ -1,0 +1,53 @@
+"""与模型供应商无关的 Coding Agent 契约和状态机。"""
+
+from coding_agent.agents.agent import DEFAULT_SYSTEM_PROMPT, Agent
+from coding_agent.agents.context import (
+    AgentContext,
+    AgentContextBuilder,
+    MemoryReference,
+    VisibleMessage,
+    VisibleRole,
+)
+from coding_agent.agents.progress import RepeatObservation, RepeatedToolExchangeDetector
+from coding_agent.agents.contracts import (
+    AdapterProtocolError,
+    AdapterRequestError,
+    AgentConfig,
+    AgentStatus,
+    AssistantMessage,
+    CompletionAdapter,
+    ModelCompletion,
+    RunResult,
+    TerminationReason,
+    TokenUsage,
+    ToolCall,
+    ToolExecutor,
+    ToolRegistry,
+    TraceEmitter,
+)
+
+__all__ = [
+    "DEFAULT_SYSTEM_PROMPT",
+    "AdapterProtocolError",
+    "AdapterRequestError",
+    "Agent",
+    "AgentConfig",
+    "AgentContext",
+    "AgentContextBuilder",
+    "AgentStatus",
+    "AssistantMessage",
+    "CompletionAdapter",
+    "ModelCompletion",
+    "MemoryReference",
+    "RepeatObservation",
+    "RepeatedToolExchangeDetector",
+    "RunResult",
+    "TerminationReason",
+    "TokenUsage",
+    "ToolCall",
+    "ToolExecutor",
+    "ToolRegistry",
+    "TraceEmitter",
+    "VisibleMessage",
+    "VisibleRole",
+]

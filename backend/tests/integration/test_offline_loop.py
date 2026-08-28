@@ -1,3 +1,5 @@
+"""使用离线适配器验证端到端智能体循环。"""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -5,7 +7,7 @@ import hashlib
 import json
 import sys
 
-from coding_agent.core import (
+from coding_agent.agents import (
     Agent,
     AgentConfig,
     AgentStatus,
@@ -13,8 +15,8 @@ from coding_agent.core import (
     ModelCompletion,
     ToolCall,
 )
-from coding_agent.security import Workspace
-from coding_agent.tools import ToolRegistry
+from coding_agent.agents.security import Workspace
+from coding_agent.agents.tools import ToolRegistry
 
 
 class ScriptedAdapter:
@@ -51,7 +53,7 @@ def _tool(call_id: str, name: str, arguments: dict) -> ModelCompletion:
     )
 
 
-def test_fake_model_drives_real_read_edit_test_loop(tmp_path):
+def test_fake_model_drives_real_search_read_edit_test_loop(tmp_path):
     source = "def add(left, right):\n    return left - right\n"
     (tmp_path / "mathutil.py").write_text(source, encoding="utf-8", newline="\n")
     (tmp_path / "test_mathutil.py").write_text(
@@ -63,7 +65,11 @@ def test_fake_model_drives_real_read_edit_test_loop(tmp_path):
 
     adapter = ScriptedAdapter(
         [
-            _tool("call-list", "list_files", {"path": "."}),
+            _tool(
+                "call-search",
+                "search_text",
+                {"query": "def add", "path": ".", "glob": "*.py"},
+            ),
             _tool("call-read", "read_file", {"path": "mathutil.py"}),
             _tool(
                 "call-edit",
@@ -105,6 +111,7 @@ def test_fake_model_drives_real_read_edit_test_loop(tmp_path):
         if message["role"] == "tool"
     ]
     assert all(payload["ok"] is True for payload in tool_payloads)
+    assert tool_payloads[0]["data"]["matches"][0]["path"] == "mathutil.py"
     assert tool_payloads[-1]["data"]["exit_code"] == 0
     assert "private-call-read" == adapter.requests[2]["messages"][-2]["reasoning_content"]
-    assert len(adapter.requests[0]["tools"]) == 5
+    assert len(adapter.requests[0]["tools"]) == 6

@@ -1,11 +1,13 @@
+"""验证命令行参数、确认交互、输出和退出码。"""
+
 from __future__ import annotations
 
 import io
 from types import SimpleNamespace
 
 import coding_agent.cli as cli
-from coding_agent.core import AgentStatus, TerminationReason
-from coding_agent.security import CommandDecision, CommandRequest
+from coding_agent.agents import AgentStatus, TerminationReason
+from coding_agent.agents.security import CommandDecision, CommandRequest
 
 
 def _options(tmp_path, *extra: str):

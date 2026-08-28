@@ -1,3 +1,5 @@
+"""验证命令工具的审批、超时、取消和进程树清理。"""
+
 from __future__ import annotations
 
 import json
@@ -8,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent.security import CommandDecision, CommandRequest, Workspace
-from coding_agent.tools import ToolRegistry
+from coding_agent.agents.security import PermissionMode, ToolApprovalRequest, Workspace
+from coding_agent.agents.tools import ToolRegistry
 
 
 def decode(payload: str) -> dict:
@@ -31,6 +33,26 @@ def test_allowlisted_python_module_runs_without_confirmation(tmp_path: Path) -> 
     assert response["meta"]["truncated"] is False
 
 
+def test_ask_mode_confirms_even_normal_checks(tmp_path: Path) -> None:
+    response = decode(
+        ToolRegistry(Workspace(tmp_path), permission_mode=PermissionMode.ASK).execute(
+            "run_command", {"argv": [sys.executable, "-m", "compileall", "-q", "."]}
+        )
+    )
+    assert response["ok"] is False
+    assert response["error"]["code"] == "command_confirmation_required"
+
+
+def test_workspace_full_runs_risky_workspace_command_without_prompt(tmp_path: Path) -> None:
+    response = decode(
+        ToolRegistry(
+            Workspace(tmp_path), permission_mode=PermissionMode.WORKSPACE_FULL
+        ).execute("run_command", {"argv": [sys.executable, "-c", "print('full')"]})
+    )
+    assert response["ok"] is True
+    assert response["data"]["stdout"].strip() == "full"
+
+
 def test_arbitrary_python_requires_confirmation(tmp_path: Path) -> None:
     registry = ToolRegistry(Workspace(tmp_path))
     response = decode(
@@ -41,9 +63,9 @@ def test_arbitrary_python_requires_confirmation(tmp_path: Path) -> None:
 
 
 def test_confirmation_callback_receives_real_request(tmp_path: Path) -> None:
-    observed: list[CommandRequest] = []
+    observed: list[ToolApprovalRequest] = []
 
-    def confirm(request: CommandRequest) -> bool:
+    def confirm(request: ToolApprovalRequest) -> bool:
         observed.append(request)
         return True
 
@@ -55,7 +77,7 @@ def test_confirmation_callback_receives_real_request(tmp_path: Path) -> None:
     assert response["data"]["stdout"] == "approved\r\n" if os.name == "nt" else "approved\n"
     assert len(observed) == 1
     assert observed[0].argv[2] == "print('approved')"
-    assert observed[0].decision is CommandDecision.CONFIRM
+    assert observed[0].tool_name == "run_command"
 
 
 def test_confirmation_callback_can_reject(tmp_path: Path) -> None:

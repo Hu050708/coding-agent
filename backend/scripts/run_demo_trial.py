@@ -1,8 +1,7 @@
-"""Create and evaluate one fresh, real-API Coding Agent demo trial.
+"""创建并评估一次使用真实 API 的全新 Coding Agent 演示试验。
 
-The script never overwrites or deletes a candidate directory.  It invokes the
-public CLI in a child process, then runs the independent evaluator.  The API key
-is inherited through the environment and is never placed in argv or output.
+脚本绝不覆盖或删除候选目录；它先在子进程中调用公共 CLI，再运行独立评测器。
+API 密钥仅通过环境继承，绝不会出现在命令参数或输出中。
 """
 
 from __future__ import annotations
@@ -37,6 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """复制基线、运行智能体、独立验收候选结果并写出试验摘要。"""
+
+    # 第一步：校验真实 API 凭据和全新输出路径，再复制只读基线作为候选目录。
     args = build_parser().parse_args(argv)
     if not os.environ.get("DEEPSEEK_API_KEY", "").strip():
         print("DEEPSEEK_API_KEY is not set in this process.", file=sys.stderr)
@@ -50,10 +52,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     shutil.copytree(BASELINE, output, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
     task = (output / "TASK.md").read_text(encoding="utf-8")
 
+    # 第二步：在外层超时保护下运行智能体，任务文本仅作为单个参数传递。
     agent_command = [
         sys.executable,
         "-m",
-        "coding-agent",
+        "coding_agent",
         "--workspace",
         os.fspath(output),
         "--model",
@@ -75,6 +78,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("Coding Agent child process exceeded the outer demo timeout.", file=sys.stderr)
         return 1
 
+    # 第三步：移除所有 API 密钥后启动独立评测器，避免候选测试接触凭据。
     evaluator_environment = {
         name: value
         for name, value in os.environ.items()
@@ -94,6 +98,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if evaluator_run.stderr:
         print(evaluator_run.stderr.rstrip(), file=sys.stderr)
 
+    # 第四步：仅当智能体和评测器都成功时判定通过，并写出机器可读摘要。
     verified = agent_run.returncode == 0 and evaluator_run.returncode == 0
     result_path = output.parent / f"{output.name}-result.json"
     result_path.write_text(

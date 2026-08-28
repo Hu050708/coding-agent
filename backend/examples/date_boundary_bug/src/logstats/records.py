@@ -1,4 +1,4 @@
-"""JSONL record loading and validation."""
+"""负责加载并校验 JSONL 日志记录。"""
 
 from __future__ import annotations
 
@@ -9,10 +9,9 @@ from .models import LogRecord
 
 
 def load_records(path: Path) -> list[LogRecord]:
-    """Load validated records from *path*.
+    """从 *path* 加载经过校验的日志记录。
 
-    Empty lines are ignored. Invalid input identifies its one-based line number
-    so command-line failures are actionable.
+    空行会被忽略；无效输入会标明从 1 开始的行号，便于定位命令行错误。
     """
 
     records: list[LogRecord] = []

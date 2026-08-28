@@ -1,3 +1,5 @@
+"""配置后端测试共享的导入路径。"""
+
 from __future__ import annotations
 
 import sys

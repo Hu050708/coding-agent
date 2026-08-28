@@ -1,4 +1,4 @@
-"""Date-window construction and membership rules."""
+"""定义日期窗口的构建和成员判断规则。"""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ DATE_FORMAT = "%Y-%m-%d"
 
 @dataclass(frozen=True, slots=True)
 class DateWindow:
-    """An inclusive, timezone-naive timestamp window."""
+    """包含两端点且不携带时区的时间戳窗口。"""
 
     start: datetime | None = None
     end: datetime | None = None

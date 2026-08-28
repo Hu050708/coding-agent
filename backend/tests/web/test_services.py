@@ -1,3 +1,5 @@
+"""验证 Web 服务组合、健康状态和生命周期收尾。"""
+
 from __future__ import annotations
 
 import asyncio
@@ -5,10 +7,10 @@ import threading
 
 import pytest
 
-from coding_agent.config import AppSettings, SettingsError
-from coding_agent.runs.event_buffer import EventBuffer
-from coding_agent.runs.run_manager import BufferTrace
-from coding_agent.security import WorkspacePolicy, WorkspacePolicyError
+from coding_agent.settings import AppSettings, SettingsError
+from coding_agent.agents.runtime.event_buffer import EventBuffer
+from coding_agent.agents.runtime.run_manager import BufferTrace
+from coding_agent.agents.security import WorkspacePolicy, WorkspacePolicyError
 
 
 def test_settings_load_env_file_without_exposing_secret(tmp_path):
@@ -28,6 +30,32 @@ def test_settings_load_env_file_without_exposing_secret(tmp_path):
 def test_settings_reject_non_loopback_host(tmp_path):
     with pytest.raises(SettingsError, match="127.0.0.1"):
         AppSettings(api_key="x", allowed_root=tmp_path, host="0.0.0.0")
+
+
+def test_settings_accepts_only_loopback_psycopg_database_urls(tmp_path):
+    settings = AppSettings(
+        api_key="x",
+        allowed_root=tmp_path,
+        database_url=(
+            "postgresql+psycopg://coding_agent:local-secret@127.0.0.1:5434/coding_agent"
+        ),
+    )
+    assert settings.database_configured is True
+    assert "local-secret" not in repr(settings)
+
+    with pytest.raises(SettingsError):
+        AppSettings(
+            api_key="x",
+            allowed_root=tmp_path,
+            database_url="postgresql+psycopg://user:secret@example.com/database",
+        )
+
+    with pytest.raises(SettingsError):
+        AppSettings(
+            api_key="x",
+            allowed_root=tmp_path,
+            database_url="sqlite:///coding-agent.db",
+        )
 
 
 def test_settings_accepts_explicit_memory_data_directory(tmp_path):
@@ -96,6 +124,17 @@ def test_event_buffer_rejects_non_json_payload():
     buffer = EventBuffer()
     with pytest.raises((TypeError, ValueError)):
         buffer.publish("bad", {"value": float("nan")})
+
+
+def test_event_buffer_serializes_persistence_callback_with_live_sequence():
+    persisted = []
+    buffer = EventBuffer(on_publish=persisted.append)
+
+    first = buffer.publish("run.accepted", {"status": "starting"})
+    second = buffer.publish("run.started", {"status": "running"})
+
+    assert persisted == [first, second]
+    assert [item.seq for item in persisted] == [1, 2]
 
 
 def test_buffer_trace_normalizes_tool_name_for_the_web_contract():

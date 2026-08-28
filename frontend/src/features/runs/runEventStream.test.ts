@@ -85,4 +85,19 @@ describe('run event stream', () => {
     handle.close()
     expect(source.closed).toBe(true)
   })
+
+  it('requests database replay after the last applied sequence', () => {
+    const source = new FakeEventSource()
+    let requestedUrl = ''
+    openRunEventStream(
+      'run-1',
+      { onOpen: () => undefined, onEvent: () => undefined, onError: () => undefined },
+      (url) => {
+        requestedUrl = url
+        return source
+      },
+      42,
+    )
+    expect(requestedUrl).toBe('/api/v1/runs/run-1/events?after_seq=42')
+  })
 })

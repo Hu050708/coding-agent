@@ -1,3 +1,5 @@
+"""验证评测器不会信任候选仓库提供的可执行代码。"""
+
 from __future__ import annotations
 
 from evaluation.verify_date_boundary import _candidate_environment

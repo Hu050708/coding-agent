@@ -1,17 +1,21 @@
+"""验证工具注册、参数分发、权限约束和错误序列化。"""
+
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
 
-from coding_agent.security import Workspace
-from coding_agent.tools import TOOL_SCHEMAS, ToolError, ToolRegistry
-from coding_agent.tools.command import ToolError as CommandToolError
-from coding_agent.tools.contracts import ToolError as ContractToolError
-from coding_agent.tools.filesystem import ToolError as FilesystemToolError
-from coding_agent.tools.registry import TOOL_SCHEMAS as RegistrySchemas
-from coding_agent.tools.registry import ToolError as RegistryToolError
-from coding_agent.tools.schemas import TOOL_SCHEMAS as SchemaModuleSchemas
+import pytest
+
+from coding_agent.agents.security import PermissionMode, Workspace
+from coding_agent.agents.tools import TOOL_SCHEMAS, ToolError, ToolRegistry
+from coding_agent.agents.tools.command import ToolError as CommandToolError
+from coding_agent.agents.tools.contracts import ToolError as ContractToolError
+from coding_agent.agents.tools.filesystem import ToolError as FilesystemToolError
+from coding_agent.agents.tools.registry import TOOL_SCHEMAS as RegistrySchemas
+from coding_agent.agents.tools.registry import ToolError as RegistryToolError
+from coding_agent.agents.tools.schemas import TOOL_SCHEMAS as SchemaModuleSchemas
 
 
 def decode(payload: str) -> dict:
@@ -20,15 +24,64 @@ def decode(payload: str) -> dict:
     return value
 
 
-def test_registry_exposes_exactly_five_independent_schemas(tmp_path: Path) -> None:
+def test_registry_exposes_exactly_six_independent_schemas(tmp_path: Path) -> None:
     registry = ToolRegistry(Workspace(tmp_path))
-    expected = {"list_files", "read_file", "write_file", "replace_text", "run_command"}
+    expected = {
+        "list_files",
+        "read_file",
+        "search_text",
+        "write_file",
+        "replace_text",
+        "run_command",
+    }
     assert {schema["function"]["name"] for schema in registry.schemas} == expected
     assert {schema["function"]["name"] for schema in TOOL_SCHEMAS} == expected
 
     first = registry.schemas
     first[0]["function"]["name"] = "mutated"
     assert "mutated" not in {schema["function"]["name"] for schema in registry.schemas}
+
+
+def test_ask_mode_exposes_writes_but_requires_approval(tmp_path: Path) -> None:
+    registry = ToolRegistry(Workspace(tmp_path), permission_mode=PermissionMode.ASK)
+    assert {schema["function"]["name"] for schema in registry.schemas} == {
+        "list_files",
+        "read_file",
+        "search_text",
+        "write_file",
+        "replace_text",
+        "run_command",
+    }
+
+    denied = decode(registry.execute("write_file", {"path": "x.txt", "content": "x"}))
+    assert denied["ok"] is False
+    assert denied["error"]["code"] == "tool_confirmation_required"
+    assert not (tmp_path / "x.txt").exists()
+
+
+def test_ask_mode_can_approve_one_file_write(tmp_path: Path) -> None:
+    observed = []
+    registry = ToolRegistry(
+        Workspace(tmp_path),
+        permission_mode=PermissionMode.ASK,
+        confirm_action=lambda request: observed.append(request) or True,
+    )
+
+    result = decode(registry.execute("write_file", {"path": "x.txt", "content": "x"}))
+
+    assert result["ok"] is True
+    assert (tmp_path / "x.txt").read_text(encoding="utf-8") == "x"
+    assert observed[0].tool_name == "write_file"
+    assert observed[0].action_summary == "写入 x.txt"
+
+
+def test_permission_mode_and_legacy_auto_approve_cannot_conflict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="conflicts"):
+        ToolRegistry(
+            Workspace(tmp_path),
+            permission_mode=PermissionMode.AGENT,
+            auto_approve=True,
+        )
 
 
 def test_modular_contracts_keep_compatibility_reexports() -> None:

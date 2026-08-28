@@ -1,3 +1,5 @@
+"""验证分层依赖方向，防止核心层反向依赖外层实现。"""
+
 from __future__ import annotations
 
 import ast
@@ -5,6 +7,7 @@ from pathlib import Path
 
 
 SOURCE = Path(__file__).resolve().parents[2] / "src" / "coding_agent"
+AGENTS = SOURCE / "agents"
 
 
 def _imports(path: Path) -> set[str]:
@@ -19,8 +22,13 @@ def _imports(path: Path) -> set[str]:
 
 
 def test_core_is_provider_and_tool_implementation_independent():
-    forbidden = ("openai", "coding_agent.providers", "coding_agent.tools", "coding_agent.security")
-    for path in (SOURCE / "core").glob("*.py"):
+    forbidden = (
+        "openai",
+        "coding_agent.agents.providers",
+        "coding_agent.agents.tools",
+        "coding_agent.agents.security",
+    )
+    for path in AGENTS.glob("*.py"):
         imported = _imports(path)
         assert not any(name.startswith(forbidden) for name in imported), (path, imported)
 
@@ -30,32 +38,47 @@ def test_only_provider_layer_imports_openai_sdk():
     for path in SOURCE.rglob("*.py"):
         if any(name == "openai" or name.startswith("openai.") for name in _imports(path)):
             sdk_importers.append(path.relative_to(SOURCE).as_posix())
-    assert sdk_importers == ["providers/deepseek.py"]
+    assert sdk_importers == ["agents/providers/deepseek.py"]
 
 
 def test_provider_depends_on_core_contracts_not_agent_implementation():
-    imported = _imports(SOURCE / "providers" / "deepseek.py")
-    assert "coding_agent.core.contracts" in imported
-    assert "coding_agent.core.agent" not in imported
+    imported = _imports(AGENTS / "providers" / "deepseek.py")
+    assert "coding_agent.agents.contracts" in imported
+    assert "coding_agent.agents.agent" not in imported
 
 
 def test_tool_handlers_depend_on_contracts_not_registry():
     for name in ("command.py", "filesystem.py"):
-        imported = _imports(SOURCE / "tools" / name)
-        assert "coding_agent.tools.registry" not in imported
+        imported = _imports(AGENTS / "tools" / name)
+        assert "coding_agent.agents.tools.registry" not in imported
         assert "registry" not in imported
 
 
 def test_command_policy_is_pure_and_does_not_import_workspace_facade():
-    imported = _imports(SOURCE / "security" / "command_policy.py")
-    assert "coding_agent.security.workspace" not in imported
+    imported = _imports(AGENTS / "security" / "command_policy.py")
+    assert "coding_agent.agents.security.workspace" not in imported
     assert "workspace" not in imported
 
 
-def test_memory_layer_does_not_import_run_or_web_orchestration():
-    for path in (SOURCE / "memory").glob("*.py"):
+def test_agent_memory_does_not_import_runtime_or_web_orchestration():
+    for path in (AGENTS / "memory").glob("*.py"):
         imported = _imports(path)
-        assert not any(name.startswith("coding_agent.runs") for name in imported), (
-            path,
-            imported,
-        )
+        assert not any(
+            name.startswith(("coding_agent.agents.runtime", "coding_agent.router"))
+            for name in imported
+        ), (path, imported)
+
+
+def test_models_do_not_depend_on_repository_or_services():
+    for path in (SOURCE / "models").glob("*.py"):
+        imported = _imports(path)
+        assert not any(
+            name.startswith(("coding_agent.repository", "coding_agent.services"))
+            for name in imported
+        ), (path, imported)
+
+
+def test_router_does_not_import_database_implementation():
+    for path in (SOURCE / "router").glob("*.py"):
+        imported = _imports(path)
+        assert not any(name.startswith("sqlalchemy") for name in imported), (path, imported)

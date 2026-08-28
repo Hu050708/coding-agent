@@ -1,3 +1,5 @@
+"""验证记忆服务的去重、容量、筛选和快照语义。"""
+
 from __future__ import annotations
 
 import os
@@ -8,15 +10,15 @@ import threading
 
 import pytest
 
-from coding_agent.memory import (
+from coding_agent.agents.memory import (
     MemoryKind,
     MemoryRepository,
     MemoryRepositoryError,
     MemoryService,
     MemorySource,
 )
-from coding_agent.memory.service import MemoryServiceError
-from coding_agent.security import WorkspacePolicy
+from coding_agent.agents.memory import MemoryServiceError
+from coding_agent.agents.security import WorkspacePolicy
 
 
 def _service(tmp_path, *, max_items=500, snapshot_items=8, snapshot_chars=6_000):
@@ -74,7 +76,7 @@ def test_crud_persists_across_repository_restart_and_closes_connections(tmp_path
     assert updated.kind is MemoryKind.PREFERENCE
     assert updated.enabled is False
 
-    # On Windows this rename fails immediately if a CRUD connection leaked.
+    # 在 Windows 上，若增删改查连接泄漏，此重命名会立即失败。
     moved = database.with_suffix(".moved")
     database.rename(moved)
     moved.rename(database)
@@ -84,6 +86,7 @@ def test_crud_persists_across_repository_restart_and_closes_connections(tmp_path
 
 
 def test_dedup_capacity_and_workspace_isolation(tmp_path):
+    # 创建两个工作区，分别验证同工作区内容去重和容量上限。
     service, _database, root = _service(tmp_path, max_items=2)
     first = root / "first"
     second = root / "second"
@@ -104,6 +107,7 @@ def test_dedup_capacity_and_workspace_isolation(tmp_path):
         service.create(workspace=str(first), kind="note", content="A third entry")
     assert capacity.value.code == "memory_capacity_reached"
 
+    # 相同内容可存在于不同工作区，且跨工作区 ID 不能用于删除。
     second_entry = service.create(
         workspace=str(second), kind="fact", content="Vue uses Vite"
     )

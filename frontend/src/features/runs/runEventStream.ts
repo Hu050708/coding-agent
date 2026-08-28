@@ -1,4 +1,8 @@
-import { RUN_EVENT_NAMES, type RunEventEnvelope, type RunEventName } from './types'
+import {
+  RUN_EVENT_NAMES,
+  type RunEventEnvelope,
+  type RunEventName,
+} from '../../shared/api/types'
 
 export interface EventSourceLike {
   onopen: ((event: Event) => void) | null
@@ -52,8 +56,13 @@ export function openRunEventStream(
   runId: string,
   callbacks: RunEventStreamCallbacks,
   factory: EventSourceFactory = defaultFactory,
+  afterSeq = 0,
 ): { close(): void } {
-  const source = factory(`/api/v1/runs/${encodeURIComponent(runId)}/events`)
+  const query = afterSeq > 0 ? `?${new URLSearchParams({ after_seq: String(afterSeq) })}` : ''
+  // The endpoint first replays persisted events after this sequence and then
+  // stays live. On network reconnect, native EventSource also forwards the
+  // latest server `id:` value as Last-Event-ID.
+  const source = factory(`/api/v1/runs/${encodeURIComponent(runId)}/events${query}`)
   source.onopen = () => callbacks.onOpen()
   source.onerror = () => callbacks.onError()
 

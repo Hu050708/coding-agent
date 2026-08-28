@@ -1,3 +1,5 @@
+"""验证工作区路径约束、原子写入和环境变量隔离。"""
+
 from __future__ import annotations
 
 import os
@@ -7,14 +9,14 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent.security import CommandDecision, Workspace, WorkspaceError
-from coding_agent.security.command_policy import classify_command
-from coding_agent.security.command_policy import (
+from coding_agent.agents.security import CommandDecision, Workspace, WorkspaceError
+from coding_agent.agents.security.command_policy import classify_command
+from coding_agent.agents.security.command_policy import (
     CommandDecision as PolicyCommandDecision,
     CommandRequest as PolicyCommandRequest,
     should_inherit_environment_name,
 )
-from coding_agent.security.workspace import (
+from coding_agent.agents.security.workspace import (
     CommandDecision as WorkspaceCommandDecision,
     CommandRequest as WorkspaceCommandRequest,
 )
@@ -36,6 +38,8 @@ def test_command_policy_split_preserves_class_identity_and_environment_rules() -
     assert should_inherit_environment_name("KEEP_ME") is True
     assert should_inherit_environment_name("DeepSeek_Api_Key") is False
     assert should_inherit_environment_name("GIT_CONFIG_COUNT") is False
+    assert should_inherit_environment_name("CODING_AGENT_DATABASE_URL") is False
+    assert should_inherit_environment_name("PGPASSWORD") is False
 
 
 @pytest.mark.parametrize(
@@ -174,6 +178,28 @@ def test_sanitized_environment_removes_secrets_and_workspace_path(tmp_path: Path
     assert Path(sys.executable).resolve().parent in entries
 
 
+def test_minimal_child_environment_drops_unrelated_and_database_variables(tmp_path: Path) -> None:
+    workspace = Workspace(tmp_path)
+    cleaned = workspace.sanitized_environment(
+        {
+            "PATH": os.fspath(Path(sys.executable).resolve().parent),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", r"C:\\Windows"),
+            "TEMP": os.fspath(tmp_path),
+            "KEEP_ME": "not required by child tools",
+            "CODING_AGENT_DATABASE_URL": "postgresql://user:secret@localhost/db",
+            "PGPASSWORD": "secret",
+            "SOME_DATABASE_URI": "postgresql://secret",
+        },
+        minimal=True,
+    )
+    names = {name.upper() for name in cleaned}
+    assert "SYSTEMROOT" in names
+    assert "KEEP_ME" not in names
+    assert "CODING_AGENT_DATABASE_URL" not in names
+    assert "PGPASSWORD" not in names
+    assert "SOME_DATABASE_URI" not in names
+
+
 def test_command_policy_allow_confirm_and_deny(tmp_path: Path) -> None:
     workspace = Workspace(tmp_path)
     allowed = workspace.prepare_command([sys.executable, "-m", "unittest"], cwd=".")
@@ -195,7 +221,7 @@ def test_command_policy_allow_confirm_and_deny(tmp_path: Path) -> None:
     assert denied.decision is CommandDecision.DENY
 
 
-def test_git_inspection_requires_confirmation_due_to_repo_configuration() -> None:
+def test_normal_git_inspection_is_allowed_for_agent_mode() -> None:
     status, _ = classify_command(
         ["git", "status"],
         [r"C:\\Program Files\\Git\\cmd\\git.exe", "status"],
@@ -206,8 +232,30 @@ def test_git_inspection_requires_confirmation_due_to_repo_configuration() -> Non
         [r"C:\\Program Files\\Git\\cmd\\git.exe", "diff", "--check"],
         python_executable=None,
     )
-    assert status is CommandDecision.CONFIRM
-    assert diff is CommandDecision.CONFIRM
+    assert status is CommandDecision.ALLOW
+    assert diff is CommandDecision.ALLOW
+
+
+def test_node_workspace_checks_are_normal_but_inline_code_is_risky() -> None:
+    executable = r"C:\Program Files\nodejs\node.exe"
+    check, _ = classify_command(
+        ["node", "--check", "src/app.js"],
+        [executable, "--check", "src/app.js"],
+        python_executable=None,
+    )
+    test, _ = classify_command(
+        ["node", "smoke-test.js"],
+        [executable, "smoke-test.js"],
+        python_executable=None,
+    )
+    inline, _ = classify_command(
+        ["node", "-e", "process.exit(0)"],
+        [executable, "-e", "process.exit(0)"],
+        python_executable=None,
+    )
+    assert check is CommandDecision.ALLOW
+    assert test is CommandDecision.ALLOW
+    assert inline is CommandDecision.CONFIRM
 
 
 def test_workspace_path_entry_cannot_shadow_executable(tmp_path: Path) -> None:

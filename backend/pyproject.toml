@@ -14,7 +14,11 @@ dependencies = [
 
 [project.optional-dependencies]
 web = [
+    "alembic==1.19.1",
     "fastapi==0.141.1",
+    "pydantic-settings==2.13.1",
+    "psycopg[binary]==3.3.4",
+    "sqlalchemy==2.0.52",
     "uvicorn==0.52.4",
 ]
 dev = [

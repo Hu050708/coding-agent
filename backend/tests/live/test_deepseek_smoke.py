@@ -1,7 +1,7 @@
-"""Opt-in real DeepSeek vertical smoke test.
+"""需要显式启用的真实 DeepSeek 纵向冒烟测试。
 
-Normal test runs skip this module. To spend API credits explicitly, set both
-DEEPSEEK_API_KEY and CODING_AGENT_RUN_LIVE=1, then run this file directly.
+普通测试会跳过本模块。若明确允许消耗 API 额度，请同时设置 DEEPSEEK_API_KEY 和
+CODING_AGENT_RUN_LIVE=1，再直接运行本文件。
 """
 
 from __future__ import annotations
@@ -11,10 +11,10 @@ from uuid import uuid4
 
 import pytest
 
-from coding_agent.core import Agent, AgentConfig, AgentStatus
-from coding_agent.providers import DeepSeekAdapter
-from coding_agent.security import Workspace
-from coding_agent.tools import ToolRegistry
+from coding_agent.agents import Agent, AgentConfig, AgentStatus
+from coding_agent.agents.providers import DeepSeekAdapter
+from coding_agent.agents.security import Workspace
+from coding_agent.agents.tools import ToolRegistry
 
 
 _LIVE_ENABLED = os.environ.get("CODING_AGENT_RUN_LIVE") == "1" and bool(

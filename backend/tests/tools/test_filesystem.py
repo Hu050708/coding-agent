@@ -1,3 +1,5 @@
+"""验证文件工具的读取限额、列表过滤和并发修改保护。"""
+
 from __future__ import annotations
 
 import codecs
@@ -8,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from coding_agent.security import Workspace
-from coding_agent.tools import ToolRegistry
+from coding_agent.agents.security import Workspace
+from coding_agent.agents.tools import ToolRegistry
 
 
 def decode(payload: str) -> dict:
@@ -65,7 +67,7 @@ def test_list_files_reports_link_without_following_it(tmp_path: Path) -> None:
 def test_list_files_has_independent_scan_limit_for_nonmatching_glob(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import coding_agent.tools.filesystem as filesystem
+    import coding_agent.agents.tools.filesystem as filesystem
 
     for index in range(5):
         (tmp_path / f"file-{index}.txt").write_text("x", encoding="utf-8")

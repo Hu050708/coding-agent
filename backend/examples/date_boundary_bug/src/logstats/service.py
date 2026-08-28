@@ -1,4 +1,4 @@
-"""Application service for log aggregation."""
+"""负责日志聚合的应用服务。"""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from .window import DateWindow
 
 
 def summarize(records: Iterable[LogRecord], window: DateWindow) -> dict[str, object]:
-    """Count records selected by *window*, grouped by level."""
+    """按级别统计被 *window* 选中的日志记录。"""
 
     levels = Counter(record.level for record in records if window.contains(record.timestamp))
     return {
@@ -27,7 +27,7 @@ def summarize_file(
     from_date: str | None = None,
     to_date: str | None = None,
 ) -> dict[str, object]:
-    """Load *path* and summarize records inside the requested date window."""
+    """加载 *path*，并汇总指定日期窗口内的日志记录。"""
 
     window = DateWindow.from_cli_dates(start_date=from_date, end_date=to_date)
     return summarize(load_records(path), window)

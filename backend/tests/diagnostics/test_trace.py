@@ -1,3 +1,5 @@
+"""验证诊断事件的脱敏、序列化和写入行为。"""
+
 from __future__ import annotations
 
 import io
@@ -5,7 +7,7 @@ import json
 
 import pytest
 
-from coding_agent.diagnostics import TraceWriter, summarize_argv
+from coding_agent.agents.diagnostics import TraceWriter, summarize_argv
 
 
 def test_trace_uses_allowlist_and_removes_sensitive_fields(tmp_path):

@@ -1,13 +1,12 @@
-# logstats date-boundary demo
+# logstats 日期边界演示
 
-This is a deliberately small project used to demonstrate Coding Agent on a real
-bug-fixing task. Each input line is a JSON object with an ISO-8601 `timestamp`
-and a `level`.
+这是一个刻意精简的小项目，用于演示 Coding Agent 如何处理真实的缺陷修复任务。
+每个输入行都是一个 JSON 对象，包含 ISO-8601 格式的 `timestamp` 和 `level`。
 
 ```powershell
 python -m pip install -e .
 python -m logstats.cli examples/sample.jsonl --from 2026-08-25 --to 2026-08-26
 ```
 
-The command prints a stable JSON object containing the selected record total
-and counts grouped by level. See `TASK.md` for the exercise.
+该命令会输出结构稳定的 JSON 对象，其中包含选中记录的总数以及按级别分组的计数。
+练习要求见 `TASK.md`。

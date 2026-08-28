@@ -90,7 +90,11 @@ class WorkspaceMemoryService:
         pinned: bool | None,
         enabled: bool | None,
     ) -> dict[str, Any]:
+        """在工作区空闲时部分更新一条长期记忆。"""
+
+        # 第一步：确保当前没有运行正在使用该工作区的记忆快照。
         self._require_mutable(workspace_id)
+        # 第二步：执行部分更新，并把不存在或内容重复转换成稳定的应用错误。
         try:
             record = self.persistence.update_memory(
                 workspace_id,
@@ -123,12 +127,16 @@ class WorkspaceMemoryService:
             raise ApplicationError(404, "workspace_not_found", "Workspace was not found.") from exc
 
     def _require_mutable(self, workspace_id: str) -> None:
+        """确认工作区存在，且当前允许修改它的长期记忆。"""
+
+        # 第一步：同时读取工作区和活动运行，避免各用例重复相同查询逻辑。
         try:
             self.persistence.get_workspace(workspace_id)
             active = self.persistence.active_run_for_workspace(workspace_id)
         except PersistenceNotFoundError as exc:
             raise ApplicationError(404, "workspace_not_found", "Workspace was not found.") from exc
         if active is not None:
+            # 第二步：运行期间冻结记忆，保证该运行所见上下文具有一致性。
             raise ApplicationError(
                 409,
                 "memory_workspace_busy",

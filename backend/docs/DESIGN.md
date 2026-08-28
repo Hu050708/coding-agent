@@ -45,9 +45,9 @@ Web 与记忆是核心循环之外的适配/编排能力，不替模型解析工
 
 - [DeepSeek 更新日志](https://api-docs.deepseek.com/updates/)
 - [模型与计费](https://api-docs.deepseek.com/quick_start/pricing/)
-- [Thinking Mode](https://api-docs.deepseek.com/guides/thinking_mode/)
-- [Tool Calls](https://api-docs.deepseek.com/guides/tool_calls/)
-- [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion/)
+- [思考模式](https://api-docs.deepseek.com/guides/thinking_mode/)
+- [工具调用](https://api-docs.deepseek.com/guides/tool_calls/)
+- [聊天补全 API](https://api-docs.deepseek.com/api/create-chat-completion/)
 - [错误码](https://api-docs.deepseek.com/quick_start/error_codes/)
 
 ## 3. 冻结的核心选择
@@ -95,15 +95,15 @@ max_tokens=8192
 ```text
 CLI ----------------------------------------------+
                                                    v
-Vue -> FastAPI -> Application Services -> Run Manager -> Agent Controller
-                    |                    |                |         |
-                    v                    v                |         `-> DeepSeek
-              Persistence         safe SSE notify        v
-                    |                              Tool Registry / Policy
+Vue -> FastAPI -> 应用服务 -> 运行管理器 -> Agent 控制器
+                    |             |             |         |
+                    v             v             |         `-> DeepSeek
+                持久化层       安全 SSE 通知     v
+                    |                       工具注册表 / 策略
                     v
               PostgreSQL
-              workspace / conversation / visible message / run /
-              safe event / approval / workspace memory
+              工作区 / 会话 / 可见消息 / 运行 /
+              安全事件 / 审批 / 工作区记忆
 ```
 
 模块按职责分包，但不机械地为每个类建目录：
@@ -121,7 +121,8 @@ backend/src/coding_agent/
   repository/               # 仓储、DTO、事务门面和安全事件
   database/                 # 连接、迁移和启动恢复
   agents/
-    contracts.py            # 值对象、预算配置和依赖端口
+    config.py               # 单次 Agent 运行的预算和重试配置
+    contracts.py            # 值对象和依赖端口
     context.py              # 有界可见历史与不可变记忆上下文
     progress.py             # 完全重复工具交换的有界哈希检测
     tool_protocol.py        # 严格 JSON 与工具结果协议
@@ -189,23 +190,23 @@ INITIALIZING
 主循环：
 
 ```text
-加入 system 和 user task
-while 预算未耗尽:
+加入系统消息和用户任务
+循环（预算未耗尽）：
     检查剩余时间/token预算
     检查完整历史和剩余时间/token预算
     请求 DeepSeek
     校验 choice、finish_reason 和消息字段，暂不提交到对话历史
-    if finish_reason == tool_calls:
+    若 finish_reason == tool_calls：
         提交完整 assistant 消息
         校验并顺序处理每个 tool_call
         为每个 call ID 追加恰好一个 tool result
         继续循环
-    elif finish_reason == stop 且无 tool_calls 且 content 非空:
+    否则若 finish_reason == stop 且无 tool_calls 且 content 非空：
         提交完整 assistant 消息
         MODEL_FINISHED
-    elif finish_reason == insufficient_system_resource:
+    否则若 finish_reason == insufficient_system_resource：
         只记诊断事件，丢弃未完成响应并原样重试上一次请求
-    else:
+    否则：
         只记运行诊断，不污染消息历史；按决策表失败
 ```
 
@@ -222,7 +223,7 @@ while 预算未耗尽:
 
 ### 5.1 `finish_reason` 决策表
 
-| finish reason | 必须满足 | 控制器行为 |
+| 结束原因 | 必须满足 | 控制器行为 |
 |---|---|---|
 | `tool_calls` | 非空、合法、唯一的 tool calls | 执行/拒绝每个调用并继续 |
 | `stop` | 无 tool calls，`content` 非空 | `MODEL_FINISHED` |

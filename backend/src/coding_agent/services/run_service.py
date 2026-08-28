@@ -315,6 +315,9 @@ class ConversationRunService:
             raise RuntimeError("durable run callback requires reconciliation") from errors[0]
 
     def _project_runtime_event(self, run_id: str, event: RunEvent) -> None:
+        """把运行时事件投影为数据库中的运行和审批状态。"""
+
+        # 按事件类型推进同一状态机；未知的展示事件只需保存在事件表，无需投影。
         if event.event == "run.started":
             self.persistence.set_run_status(
                 run_id, StoredRunStatus.RUNNING, started_at=event.timestamp
@@ -461,12 +464,16 @@ class ConversationRunService:
                     continue
 
     def _persist_finished(self, run_id: str, summary: dict[str, Any]) -> None:
+        """把进程内运行摘要转换为持久化终态和助手消息。"""
+
+        # 第一步：解析终态、公开错误和以毫秒表示的运行时长。
         status = StoredRunStatus(str(summary["status"]))
         error = summary.get("error") if isinstance(summary.get("error"), dict) else {}
         duration = summary.get("duration_seconds")
         duration_ms = (
             round(float(duration) * 1000) if isinstance(duration, (int, float)) else None
         )
+        # 第二步：在事务服务中原子追加助手消息并写入最终用量统计。
         self.persistence.append_assistant_message_and_finish(
             run_id,
             content=summary.get("final_content"),
@@ -481,10 +488,14 @@ class ConversationRunService:
         )
 
     def _persist_approval_required(self, run_id: str, event: RunEvent) -> None:
+        """从 approval.required 事件创建可恢复的数据库审批记录。"""
+
+        # 第一步：取出并解析运行时已脱敏的审批载荷。
         approval = event.data.get("approval")
         if not isinstance(approval, dict):
             raise ValueError("approval event is malformed")
         expires_at = _parse_timestamp(approval.get("expires_at"))
+        # 第二步：持久化必要展示信息，使服务重启后仍能解释待审批操作。
         self.persistence.create_approval(
             approval_id=str(approval.get("approval_id", "")),
             run_id=run_id,
@@ -495,6 +506,8 @@ class ConversationRunService:
         )
 
     def _persist_approval_resolution(self, event: RunEvent) -> None:
+        """将运行时审批结果映射为数据库枚举并完成审批。"""
+
         resolution = str(event.data.get("resolution") or "reject")
         status = {
             "approve": ApprovalStatus.APPROVED,
@@ -510,12 +523,16 @@ class ConversationRunService:
     def _pending_approval_view(
         run_id: str, approval: dict[str, Any], workspace: str
     ) -> dict[str, Any]:
+        """把内部审批对象转换成不暴露工作区绝对路径的前端视图。"""
+
+        # 第一步：规范化命令参数，并尽量把执行目录显示成工作区相对路径。
         argv = approval.get("argv")
         cwd = str(approval.get("cwd") or workspace)
         try:
             cwd_label = os.fspath(Path(cwd).relative_to(Path(workspace))) or "."
         except ValueError:
             cwd_label = Path(cwd).name or "."
+        # 第二步：仅返回审批 UI 所需字段，并补齐稳定的展示默认值。
         return {
             "id": approval.get("approval_id"),
             "run_id": run_id,

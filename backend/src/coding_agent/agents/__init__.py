@@ -1,6 +1,7 @@
 """与模型供应商无关的 Coding Agent 契约和状态机。"""
 
 from coding_agent.agents.agent import DEFAULT_SYSTEM_PROMPT, Agent
+from coding_agent.agents.config import AgentConfig
 from coding_agent.agents.context import (
     AgentContext,
     AgentContextBuilder,
@@ -12,7 +13,6 @@ from coding_agent.agents.progress import RepeatObservation, RepeatedToolExchange
 from coding_agent.agents.contracts import (
     AdapterProtocolError,
     AdapterRequestError,
-    AgentConfig,
     AgentStatus,
     AssistantMessage,
     CompletionAdapter,

@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
-import os
 from typing import Any
 
 from sqlalchemy import Engine, create_engine, text
@@ -13,25 +12,8 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 
 
-DATABASE_URL_ENV = "CODING_AGENT_DATABASE_URL"
-
-
 class DatabaseConfigurationError(RuntimeError):
     pass
-
-
-def database_url_from_environment(
-    environ: Mapping[str, str] | None = None,
-    *,
-    variable: str = DATABASE_URL_ENV,
-) -> str:
-    source = os.environ if environ is None else environ
-    value = source.get(variable, "").strip()
-    if not value:
-        raise DatabaseConfigurationError(
-            f"{variable} is required for the web application PostgreSQL store."
-        )
-    return value
 
 
 @dataclass(slots=True)
@@ -106,9 +88,7 @@ def create_database(
 
 
 __all__ = [
-    "DATABASE_URL_ENV",
     "Database",
     "DatabaseConfigurationError",
     "create_database",
-    "database_url_from_environment",
 ]

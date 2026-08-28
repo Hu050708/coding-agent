@@ -105,6 +105,7 @@ def tool_result_metadata(
 def normalize_tool_result(result: Any) -> str:
     """写入历史前，确保注册表返回统一的 JSON 对象结果。"""
 
+    # 第一步：工具边界必须返回字符串形式的严格 JSON 对象。
     if not isinstance(result, str):
         return tool_error(
             "invalid_tool_result",
@@ -117,6 +118,7 @@ def normalize_tool_result(result: Any) -> str:
             "invalid_tool_result",
             "tool registry returned invalid JSON",
         )
+    # 第二步：统一协议至少包含布尔型 ok；失败时改写成模型可理解的工具错误。
     if not isinstance(payload.get("ok"), bool):
         return tool_error(
             "invalid_tool_result",
@@ -126,8 +128,9 @@ def normalize_tool_result(result: Any) -> str:
 
 
 def add_progress_warning(result: str, *, repeat_count: int) -> str:
-    """Attach one advisory warning without changing the original result status."""
+    """附加重复调用警告，同时保留原工具结果的成功或失败状态。"""
 
+    # 第一步：复制已有 meta，避免覆盖工具本身提供的截断、耗时等信息。
     payload = strict_json_object(result)
     raw_meta = payload.get("meta")
     meta = dict(raw_meta) if isinstance(raw_meta, Mapping) else {}
@@ -139,6 +142,7 @@ def add_progress_warning(result: str, *, repeat_count: int) -> str:
             "Inspect the result and change approach before retrying."
         ),
     }
+    # 第二步：只替换 meta 后重新序列化，ok、data 和 error 保持原样。
     payload["meta"] = meta
     return json.dumps(
         payload,

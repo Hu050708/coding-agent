@@ -109,6 +109,9 @@ def optional_number(
 
 
 def validate_json_value(value: Any) -> None:
+    """递归确认工具参数只包含标准 JSON 可表达的值。"""
+
+    # 标量直接结束；容器递归检查，浮点数额外拒绝 JSON 不支持的非有限值。
     if value is None or isinstance(value, (str, bool, int)):
         return
     if isinstance(value, float):

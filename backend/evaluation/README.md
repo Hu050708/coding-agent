@@ -1,17 +1,15 @@
-# Independent demo evaluation
+# 独立演示评测
 
-Keep this directory outside the workspace handed to Coding Agent. It validates a
-candidate copy of `examples/date_boundary_bug` with:
+请将本目录放在交给 Coding Agent 的工作区之外。它使用以下命令验证
+`examples/date_boundary_bug` 的候选副本：
 
 ```powershell
-python evaluation/verify_date_boundary.py PATH_TO_CANDIDATE
+python evaluation/verify_date_boundary.py <候选目录路径>
 ```
 
-Acceptance requires the candidate's own tests to pass, at least one additional
-collected test beyond the four-test baseline, correct end-of-day behavior, and
-unchanged unfiltered CLI output.
+验收要求：候选副本自身的测试必须通过；与四项测试的基线相比，至少多收集一项测试；
+日期结束边界行为必须正确；未使用筛选条件时的 CLI 输出必须保持不变。
 
-The evaluator launches the candidate's tests and CLI as local subprocesses. It
-removes API-key-like environment variables and avoids writing caches into the
-candidate, but it is not an OS sandbox. Run it only on a trusted, disposable
-demo copy—not on arbitrary downloaded code.
+评测程序会以本地子进程方式运行候选副本的测试和 CLI。它会移除类似 API 密钥的
+环境变量，并避免向候选副本写入缓存，但它并不是操作系统级沙箱。请只对可信、可随时
+丢弃的演示副本运行评测，不要对任意下载的代码运行。

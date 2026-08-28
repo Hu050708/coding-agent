@@ -38,19 +38,19 @@ from .records import (
     run_record,
     workspace_record,
 )
-from .repositories import (
+from .approval_repo import ApprovalRepository
+from .base import (
     MAX_MEMORY_ENTRIES,
-    ApprovalRepository,
-    ConversationRepository,
-    MemoryRepository,
-    MessageRepository,
+    UUIDLike,
     PersistenceConflictError,
     PersistenceNotFoundError,
-    RunEventRepository,
-    RunRepository,
-    UUIDLike,
-    WorkspaceRepository,
 )
+from .conversation_repo import ConversationRepository
+from .event_repo import RunEventRepository
+from .memory_repo import MemoryRepository
+from .message_repo import MessageRepository
+from .run_repo import RunRepository
+from .workspace_repo import WorkspaceRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,12 +125,16 @@ class PersistenceService:
         default_permission_mode: PermissionMode | str = PermissionMode.AGENT,
         use_memory: bool = True,
     ) -> ConversationRecord:
+        """在可用工作区内创建会话，并返回与 ORM 解耦的记录对象。"""
+
         with self.session_factory.begin() as session:
+            # 第一步：锁定工作区并阻止在已归档工作区继续创建内容。
             workspace = WorkspaceRepository(session).require(
                 workspace_id, for_update=True
             )
             if workspace.archived_at is not None:
                 raise PersistenceConflictError("workspace is archived")
+            # 第二步：在同一事务创建会话并转换为跨层使用的不可变记录。
             item = ConversationRepository(session).create(
                 workspace_id=workspace.id,
                 title=title,
@@ -169,8 +173,12 @@ class PersistenceService:
         default_permission_mode: PermissionMode | str | None = None,
         use_memory: bool | None = None,
     ) -> ConversationRecord:
+        """在工作区归属约束下部分更新会话。"""
+
         with self.session_factory.begin() as session:
+            # 第一步：锁定父工作区，使工作区状态变化与会话修改串行化。
             WorkspaceRepository(session).require(workspace_id, for_update=True)
+            # 第二步：限定同一工作区更新目标，并在事务内生成返回记录。
             return conversation_record(
                 ConversationRepository(session).update(
                     conversation_id,
@@ -520,9 +528,10 @@ class PersistenceService:
         """为运行创建幂等审批记录，并与同一运行的其他写入串行化。"""
 
         with self.session_factory.begin() as session:
-            # 锁定所属运行，使回调重试保持幂等，并与同一运行的其他等待者串行执行。
+            # 第一步：锁定所属运行，使回调重试与该运行的其他写入串行执行。
             run = RunRepository(session).require(run_id, for_update=True)
             approvals = ApprovalRepository(session)
+            # 第二步：若相同审批已经落库则返回原记录，实现事件重放幂等。
             existing = approvals.get(approval_id, for_update=True)
             if existing is not None:
                 if existing.run_id != run.id:
@@ -530,6 +539,7 @@ class PersistenceService:
                         "approval belongs to a different run"
                     )
                 return approval_record(existing)
+            # 第三步：不存在时才创建 pending 记录，并随上下文提交整个事务。
             return approval_record(
                 approvals.create(
                     approval_id=approval_id,

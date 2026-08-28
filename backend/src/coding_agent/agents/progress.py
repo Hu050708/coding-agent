@@ -24,7 +24,7 @@ class RepeatObservation:
 
 
 class RepeatedToolExchangeDetector:
-    """Track hashes of canonical tool exchanges without retaining raw content."""
+    """在不保留原始内容的情况下跟踪规范化工具交换的哈希。"""
 
     def __init__(self, *, warning_threshold: int = 3, max_fingerprints: int = 128) -> None:
         if (
@@ -49,7 +49,7 @@ class RepeatedToolExchangeDetector:
         arguments: Mapping[str, Any],
         result: str,
     ) -> RepeatObservation:
-        """Count one semantically identical name/arguments/result exchange."""
+        """统计一次工具名、参数和结果在语义上完全相同的交换。"""
 
         fingerprint = _exchange_fingerprint(tool_name, arguments, result)
         count = self._counts.pop(fingerprint, 0) + 1
@@ -71,6 +71,9 @@ def _exchange_fingerprint(
     arguments: Mapping[str, Any],
     result: str,
 ) -> str:
+    """对工具名、参数和去波动后的结果生成稳定指纹。"""
+
+    # 第一步：以稳定键顺序序列化参数，消除字典插入顺序差异。
     canonical_arguments = json.dumps(
         dict(arguments),
         ensure_ascii=False,
@@ -78,6 +81,7 @@ def _exchange_fingerprint(
         sort_keys=True,
         separators=(",", ":"),
     )
+    # 第二步：结果若为 JSON，则移除耗时和时间戳等每次都会变化的字段。
     try:
         parsed_result: Any = json.loads(result)
     except (TypeError, ValueError):
@@ -91,6 +95,7 @@ def _exchange_fingerprint(
         sort_keys=True,
         separators=(",", ":"),
     )
+    # 第三步：用空字节分隔三部分，避免字符串拼接产生边界歧义。
     digest = hashlib.sha256()
     for value in (tool_name, canonical_arguments, canonical_result):
         digest.update(value.encode("utf-8"))

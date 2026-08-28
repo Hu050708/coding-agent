@@ -172,11 +172,13 @@ def safe_approval_data(
         "action_summary": action_summary,
         "reason": reason,
     }
+    # 第一步：逐项确认展示字段是非空文本，并限制数据库中的最大长度。
     result: dict[str, str] = {}
     for key, value in values.items():
         if not isinstance(value, str) or not value.strip():
             raise UnsafeEventError(f"{key} must be non-empty text")
         result[key] = value.strip()[:1_000]
+    # 第二步：返回新字典，不携带调用方可能附加的命令和环境字段。
     return result
 
 

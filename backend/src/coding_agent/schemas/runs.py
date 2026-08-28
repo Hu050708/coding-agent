@@ -1,12 +1,14 @@
-"""定义进程内运行、审批和用量汇总的数据模型。"""
+"""定义会话级持久化运行及其事件的数据模型。"""
 
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
+from .base import ApiModel
 from .conversations import PermissionModeValue
 
 
@@ -19,85 +21,47 @@ RunStatusValue = Literal[
     "failed",
     "cancelled",
     "budget_exhausted",
+    "interrupted",
 ]
 
 
-class ApiModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class RunCreateRequest(ApiModel):
-    workspace: str = Field(min_length=1, max_length=1024)
-    task: str = Field(min_length=1, max_length=100_000)
+class ConversationRunCreateRequest(ApiModel):
+    content: str = Field(min_length=1, max_length=100_000)
+    permission_mode: PermissionModeValue
     use_memory: bool = True
+    client_request_id: UUID
 
-    @field_validator("workspace")
+    @field_validator("content")
     @classmethod
-    def workspace_must_not_be_blank(cls, value: str) -> str:
+    def content_must_not_be_blank(cls, value: str) -> str:
         if not value.strip():
-            raise ValueError("workspace may not be blank")
-        return value.strip()
-
-    @field_validator("task")
-    @classmethod
-    def task_must_not_be_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("task may not be blank")
+            raise ValueError("content may not be blank")
         return value
 
 
-class UsageResponse(ApiModel):
-    prompt_tokens: int = Field(default=0, ge=0)
-    completion_tokens: int = Field(default=0, ge=0)
-    total_tokens: int = Field(default=0, ge=0)
-    prompt_cache_hit_tokens: int = Field(default=0, ge=0)
-    prompt_cache_miss_tokens: int = Field(default=0, ge=0)
-
-
-class RunErrorResponse(ApiModel):
-    code: str
-    message: str
-
-
-class PendingApprovalResponse(ApiModel):
-    approval_id: str
-    argv: list[str]
-    cwd: str
-    reason: str
-    created_at: datetime
-    expires_at: datetime
-
-
-class MemorySummaryResponse(ApiModel):
-    status: Literal["pending", "loaded", "empty", "disabled", "unavailable"]
-    loaded_count: int = Field(default=0, ge=0)
-    loaded_ids: list[str] = Field(default_factory=list)
-
-
-class RunSummaryResponse(ApiModel):
-    run_id: str
+class RunResponse(ApiModel):
+    id: UUID
+    conversation_id: UUID
+    workspace_id: UUID
+    permission_mode: PermissionModeValue
+    use_memory: bool
     status: RunStatusValue
-    workspace: str
-    permission_mode: PermissionModeValue = "agent"
+    model: str
+    final_content: str | None = None
+    reason: str | None = None
+    error: dict[str, str] | None = None
+    usage: dict[str, int] = Field(default_factory=dict)
+    pending_approval: dict[str, Any] | None = None
     created_at: datetime
     started_at: datetime | None = None
     finished_at: datetime | None = None
-    final_content: str | None = None
-    reason: str | None = None
-    error: RunErrorResponse | None = None
-    model_calls: int = Field(default=0, ge=0)
-    tool_calls: int = Field(default=0, ge=0)
-    usage: UsageResponse = Field(default_factory=UsageResponse)
-    duration_seconds: float | None = Field(default=None, ge=0)
-    memory: MemorySummaryResponse = Field(
-        default_factory=lambda: MemorySummaryResponse(status="unavailable")
-    )
-    pending_approval: PendingApprovalResponse | None = None
-    cancel_requested: bool = False
 
 
-class RunListResponse(ApiModel):
-    items: list[RunSummaryResponse]
+class RunEventResponse(ApiModel):
+    seq: int = Field(ge=1)
+    event: str
+    timestamp: datetime
+    data: dict[str, Any]
 
 
 class ApprovalDecisionRequest(ApiModel):
@@ -105,20 +69,17 @@ class ApprovalDecisionRequest(ApiModel):
 
 
 class ApprovalDecisionResponse(ApiModel):
-    run_id: str
-    approval_id: str
+    run_id: UUID
+    approval_id: UUID
     decision: Literal["approve", "reject"]
     accepted: bool = True
 
 
 __all__ = [
+    "ConversationRunCreateRequest",
     "ApprovalDecisionRequest",
     "ApprovalDecisionResponse",
-    "PendingApprovalResponse",
-    "MemorySummaryResponse",
-    "RunCreateRequest",
-    "RunListResponse",
+    "RunResponse",
     "RunStatusValue",
-    "RunSummaryResponse",
-    "UsageResponse",
+    "RunEventResponse",
 ]

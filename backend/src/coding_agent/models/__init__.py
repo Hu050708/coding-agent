@@ -10,17 +10,11 @@ from .enums import (
     PermissionMode,
     RunStatus,
 )
-from .orm import (
-    Approval,
-    Base,
-    Conversation,
-    MemoryEntry,
-    Message,
-    Run,
-    RunEvent,
-    RunMemory,
-    Workspace,
-)
+from .base import Base
+from .conversation import Conversation
+from .memory import MemoryEntry, RunMemory
+from .run import Approval, Message, Run, RunEvent
+from .workspace import Workspace
 
 __all__ = [
     "ACTIVE_RUN_STATUSES",

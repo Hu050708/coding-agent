@@ -152,7 +152,7 @@ class MemoryRepository:
     ) -> StoredMemory:
         """在立即事务中检查容量并创建唯一记忆条目。"""
 
-        # 容量检查和插入必须共享写锁，否则并发创建可能同时越过上限。
+        # 第一步：开启立即事务，让容量检查和插入共享写锁，避免并发越过上限。
         record: StoredMemory | None = None
         try:
             with self._connection() as connection, connection:
@@ -164,6 +164,7 @@ class MemoryRepository:
                 ).fetchone()[0]
                 if count >= max_items:
                     raise MemoryCapacityError("The workspace memory limit has been reached.")
+                # 第二步：插入记忆正文、来源和内容哈希；数据库唯一约束负责去重。
                 connection.execute(
                     """
                     INSERT INTO memory_entries (
@@ -184,6 +185,7 @@ class MemoryRepository:
                         timestamp,
                     ),
                 )
+                # 第三步：在提交前重新读取并解码，保证返回值就是已保存的数据形态。
                 row = connection.execute(
                     "SELECT * FROM memory_entries WHERE workspace_key = ? AND id = ?",
                     (workspace_key, memory_id),

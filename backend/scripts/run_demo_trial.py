@@ -29,7 +29,7 @@ def _default_output() -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--output", type=Path, default=None, help="new candidate directory")
+    parser.add_argument("--output", type=Path, default=None, help="新候选目录")
     parser.add_argument("--model", default="deepseek-v4-flash")
     parser.add_argument("--wall-time", type=float, default=480.0)
     return parser

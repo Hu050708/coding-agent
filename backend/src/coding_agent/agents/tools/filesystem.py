@@ -126,6 +126,7 @@ def read_file(
 ) -> dict[str, Any]:
     """在字节和字符双重限制下读取 UTF-8 文本的指定行区间。"""
 
+    # 第一步：解析目标路径和行范围，再通过 Workspace 锁定工作区内文件。
     reject_unknown(arguments, {"path", "start_line", "end_line"})
     relative = require_string(arguments, "path", max_length=1024)
     start_line = optional_integer(arguments, "start_line", default=1, minimum=1, maximum=10_000_000)
@@ -138,15 +139,18 @@ def read_file(
             raise ToolError("invalid_line_range", "end_line must be greater than or equal to start_line.")
 
     target = workspace.resolve_existing(relative, expected="file", operation="read")
+    # 第二步：按字节上限读取并解码，只允许 Agent 文本工具支持的 UTF-8 文件。
     data = _read_limited(target, max_file_bytes)
     text, encoding, has_bom = _decode_utf8_text(data)
     lines = text.splitlines(keepends=True)
     total_lines = len(lines)
+    # 第三步：截取调用方请求的行区间，并独立应用响应字符上限。
     selected_end = total_lines if end_line is None else min(end_line, total_lines)
     selected = "" if start_line > total_lines else "".join(lines[start_line - 1 : selected_end])
     truncated = len(selected) > max_chars
     returned = selected[:max_chars]
 
+    # 第四步：附带快照哈希和文本格式，供后续 replace_text 做并发校验。
     normalized_path = _normalized_relative(workspace, relative)
     return {
         "data": {"path": normalized_path, "content": returned},
@@ -173,6 +177,7 @@ def write_file(
 ) -> dict[str, Any]:
     """以仅创建模式原子写入 UTF-8 文件，禁止覆盖已有目标。"""
 
+    # 第一步：校验路径和正文，并在落盘前完成 UTF-8 编码。
     reject_unknown(arguments, {"path", "content"})
     relative = require_string(arguments, "path", max_length=1024)
     content = require_string(
@@ -185,6 +190,7 @@ def write_file(
         data = content.encode("utf-8")
     except UnicodeEncodeError as exc:
         raise ToolError("invalid_utf8_text", "content cannot be encoded as UTF-8.") from exc
+    # 第二步：由 Workspace 执行仅创建原子写入，避免覆盖已有文件。
     target = workspace.atomic_create(relative, data)
     return {
         "data": {"path": workspace.relative_label(target)},

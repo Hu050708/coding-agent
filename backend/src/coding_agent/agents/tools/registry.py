@@ -174,6 +174,9 @@ class ToolRegistry:
             )
 
     def _confirm_tool_action(self, name: str, arguments: Mapping[str, Any]) -> None:
+        """按当前权限策略，为文件修改工具发起一次同步审批。"""
+
+        # 第一步：只有策略判定为 confirm 的工具才构造审批请求。
         if self.permission_policy.tool_decision(name) is not CommandDecision.CONFIRM:
             return
         path = arguments.get("path")
@@ -186,6 +189,7 @@ class ToolRegistry:
         )
         if self.confirm_action is None:
             raise ToolError("tool_confirmation_required", request.reason)
+        # 第二步：调用运行时审批通道，并把回调异常或拒绝转换成工具错误。
         try:
             approved = bool(self.confirm_action(request))
         except Exception as exc:

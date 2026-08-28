@@ -6,15 +6,13 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
+
+from .base import ApiModel
 
 
 PermissionModeValue = Literal["ask", "agent", "workspace_full"]
 ConversationRoleValue = Literal["user", "assistant"]
-
-
-class ApiModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
 
 
 class ConversationCreateRequest(ApiModel):

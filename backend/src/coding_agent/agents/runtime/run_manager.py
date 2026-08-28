@@ -180,6 +180,8 @@ class RunSession:
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def summary(self) -> dict[str, Any]:
+        """在线程锁内生成供 API 和持久化回调使用的一致快照。"""
+
         with self.lock:
             return {
                 "run_id": self.run_id,
@@ -262,7 +264,10 @@ class RunSession:
         return True
 
     def finish(self, outcome: RunOutcome) -> None:
+        """把执行器结果归并为 Web 运行终态。"""
+
         with self.lock:
+            # 第一步：取消信号优先，其次按执行器状态选择最终状态和正文。
             cancelled = self.cancel_event.is_set() or outcome.status == "cancelled"
             if cancelled:
                 self.status = RunStatus.CANCELLED
@@ -280,6 +285,7 @@ class RunSession:
                 self.status = RunStatus.FAILED
                 self.reason = outcome.reason
                 self.final_content = outcome.final_content
+            # 第二步：复制用量、记忆和完成时间，形成可持久化的完整终态快照。
             self.model_calls = outcome.model_calls
             self.tool_calls = outcome.tool_calls
             self.usage = dict(outcome.usage)
@@ -290,7 +296,10 @@ class RunSession:
             self.finished_at = utc_now()
 
     def fail(self, code: str, message: str) -> None:
+        """记录运行器未能返回正常 RunOutcome 时的失败终态。"""
+
         with self.lock:
+            # 第一步：如果用户已经请求取消，则取消语义覆盖内部错误。
             if self.cancel_event.is_set():
                 self.status = RunStatus.CANCELLED
                 self.reason = "user_cancelled"
@@ -299,6 +308,7 @@ class RunSession:
                 self.status = RunStatus.FAILED
                 self.reason = code
                 self.error = {"code": code, "message": message}
+            # 第二步：补齐尚未完成的记忆状态并清除悬挂审批。
             if self.memory.status == "pending":
                 self.memory = MemorySummary(status="unavailable")
             self.pending_approval = None
@@ -319,6 +329,8 @@ class RunManager:
         approval_timeout_seconds: float = 480.0,
         run_deadline_seconds: float | None = None,
     ) -> None:
+        """初始化进程内运行索引、工作区占位和有界线程池。"""
+
         self.runner = runner
         self.workspace_policy = workspace_policy
         self.max_active_runs = max_active_runs
@@ -532,6 +544,7 @@ class RunManager:
     def reserve_memory_mutation(self, workspace: str) -> Iterator[Path]:
         """执行一次变更期间，原子排除同工作区运行。"""
 
+        # 第一步：规范化工作区，并在管理器锁内检查运行和其他记忆变更冲突。
         resolved_workspace = self.validate_workspace(workspace)
         key = self._workspace_key(resolved_workspace)
         with self._lock:
@@ -552,6 +565,7 @@ class RunManager:
                     status_code=409,
                 )
             self._memory_mutations.add(key)
+        # 第二步：调用方持有逻辑预留期间执行数据库变更，结束后始终释放占位。
         try:
             yield resolved_workspace
         finally:
@@ -561,6 +575,7 @@ class RunManager:
     def validate_memory_source(self, run_id: str, workspace: str) -> None:
         """确认可选运行来源，且不暴露保留的运行内容。"""
 
+        # 第一步：取得来源会话快照，并把不存在统一映射为记忆领域错误。
         resolved_workspace = self.validate_workspace(workspace)
         try:
             session = self._session(run_id)
@@ -568,6 +583,7 @@ class RunManager:
             raise RunManagerError(
                 "memory_not_found", "The source run was not found.", status_code=404
             ) from exc
+        # 第二步：来源必须属于同一工作区且已经成功完成。
         expected = self._workspace_key(resolved_workspace)
         with session.lock:
             actual = self._workspace_key(session.workspace)
@@ -592,11 +608,15 @@ class RunManager:
         return [session.summary() for session in reversed(sessions)]
 
     def shutdown(self, *, wait: bool = False) -> None:
+        """停止接收新运行，取消活动会话并关闭线程池。"""
+
+        # 第一步：原子切换关闭状态并复制活动运行 ID，避免持锁执行回调。
         with self._lock:
             if self._closing:
                 return
             self._closing = True
             active_ids = tuple(self._active_workspaces.values())
+        # 第二步：逐个发出协作式取消，最后关闭执行器并拒绝后续提交。
         for run_id in active_ids:
             try:
                 self._session(run_id).request_cancel()

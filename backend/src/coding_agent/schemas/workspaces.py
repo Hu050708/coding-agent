@@ -5,12 +5,9 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import Field, field_validator
 
-
-class ApiModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
+from .base import ApiModel
 
 class WorkspaceCreateRequest(ApiModel):
     path: str = Field(min_length=1, max_length=1024)

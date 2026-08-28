@@ -59,6 +59,8 @@ class ApprovalBroker:
         pending_changed: Callable[[PendingApproval | None], Any],
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
+        """保存运行级回调，并建立审批等待所需的条件变量。"""
+
         self.run_id = run_id
         self.cancel_event = cancel_event
         if not math.isfinite(float(timeout_seconds)) or float(timeout_seconds) <= 0:
@@ -109,12 +111,14 @@ class ApprovalBroker:
             self._pending = pending
             self._decision = None
 
+        # 第二步：先更新会话快照，再广播审批事件供 HTTP/SSE 层持久化和展示。
         self._pending_changed(pending)
         self._publish(
             "approval.required",
             {"run_id": self.run_id, "approval": pending.as_dict()},
         )
 
+        # 第三步：在条件变量上等待 REST 决定，并定期检查取消和超时。
         deadline = self._clock() + effective_timeout
         with self._condition:
             while self._decision is None and not self.cancel_event.is_set():
@@ -132,6 +136,7 @@ class ApprovalBroker:
             self._pending = None
             self._decision = None
 
+        # 第四步：清除一次性等待状态，并发布统一的审批终态事件。
         self._pending_changed(None)
         self._publish(
             "approval.resolved",
@@ -145,6 +150,9 @@ class ApprovalBroker:
         return approved
 
     def resolve(self, approval_id: str, decision: str) -> None:
+        """提交一次审批决定，并唤醒正在等待的工具线程。"""
+
+        # 第一步：校验决定值和审批 ID，拒绝过期或重复提交。
         if decision not in {"approve", "reject"}:
             raise ApprovalBrokerError("approval_decision_invalid", "Decision must be approve or reject.")
         with self._condition:
@@ -157,6 +165,7 @@ class ApprovalBroker:
                 raise ApprovalBrokerError("approval_already_resolved", "The approval was already resolved.")
             if self.cancel_event.is_set():
                 raise ApprovalBrokerError("run_cancelling", "The run is already cancelling.")
+            # 第二步：在同一条件锁内保存决定并通知等待者，避免丢失唤醒。
             self._decision = decision
             self._condition.notify_all()
 

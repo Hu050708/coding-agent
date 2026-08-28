@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import UUID
 
-from coding_agent.models import orm as models
+from coding_agent import models
 
 
 def _aware(value: datetime) -> datetime:

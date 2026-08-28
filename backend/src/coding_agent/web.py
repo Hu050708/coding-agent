@@ -14,8 +14,8 @@ def build_parser() -> argparse.ArgumentParser:
     return argparse.ArgumentParser(
         prog="coding-agent-web",
         description=(
-            "Start the loopback-only Coding Agent Web API. "
-            "Configuration is read from environment variables and the project .env file."
+            "启动仅监听回环地址的 Coding Agent Web API。"
+            "配置从环境变量和项目的 .env 文件中读取。"
         ),
     )
 

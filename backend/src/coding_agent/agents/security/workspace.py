@@ -160,7 +160,7 @@ class Workspace:
     ) -> Path:
         """解析并校验已存在路径，确保最终目标仍位于工作区内。"""
 
-        # 先检查词法路径和受保护组件，再解析链接并验证真实路径包含关系。
+        # 第一步：先检查词法路径和受保护组件，拒绝不存在或禁止访问的入口。
         parts = self.relative_parts(relative)
         self._check_protected(parts, operation=operation)
         lexical = self.root.joinpath(*parts)
@@ -172,6 +172,7 @@ class Workspace:
             resolved = lexical.resolve(strict=True)
         except (OSError, RuntimeError) as exc:
             raise WorkspaceError("unresolvable_path", "The requested path cannot be resolved safely.") from exc
+        # 第二步：对解析链接后的真实路径再次检查工作区包含关系和预期类型。
         self._ensure_contained(resolved)
         if expected == "file" and not resolved.is_file():
             raise WorkspaceError("not_a_file", "The requested path is not a regular file.")
@@ -180,6 +181,9 @@ class Workspace:
         return resolved
 
     def resolve_new_file(self, relative: str) -> Path:
+        """解析尚不存在的新文件路径，并确认其父目录安全可写。"""
+
+        # 第一步：校验相对路径及受保护目录，并保证目标当前确实不存在。
         parts = self.relative_parts(relative)
         if not parts:
             raise WorkspaceError("invalid_path", "A file path is required.")
@@ -187,6 +191,7 @@ class Workspace:
         target = self.root.joinpath(*parts)
         if os.path.lexists(target):
             raise WorkspaceError("path_exists", "write_file only creates new files; the target already exists.")
+        # 第二步：解析真实父目录，阻止符号链接把写入位置带出工作区。
         parent_lexical = target.parent
         if not os.path.lexists(parent_lexical):
             raise WorkspaceError("parent_not_found", "The target parent directory does not exist.")
@@ -197,6 +202,7 @@ class Workspace:
         self._ensure_contained(parent)
         if not parent.is_dir():
             raise WorkspaceError("parent_not_directory", "The target parent is not a directory.")
+        # 第三步：使用已验证的真实父目录重建目标，并再次确认包含关系。
         resolved_target = parent / target.name
         self._ensure_contained(resolved_target)
         return resolved_target

@@ -13,7 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from coding_agent.services import ApplicationServices
 from coding_agent.router.errors import install_error_handlers
 from coding_agent.router import api_router
-from coding_agent.settings import AppSettings, SettingsError
+from coding_agent.settings import AppSettings
 from coding_agent.database import (
     Database,
     create_database,
@@ -51,14 +51,16 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        """在 Web 服务生命周期内装配并释放数据库、运行管理器和业务服务。"""
+
         # 第一步：加载配置，迁移并检查数据库；注入对象则保留其所有权给调用方。
-        effective_settings = settings or AppSettings.from_environment()
+        effective_settings = settings or AppSettings()
         workspace_policy = WorkspacePolicy(effective_settings.allowed_root)
         effective_database = database
         owns_database = effective_database is None
         if effective_database is None:
             if not effective_settings.database_configured:
-                raise SettingsError(
+                raise RuntimeError(
                     "CODING_AGENT_DATABASE_URL is required for Coding Agent Web."
                 )
             try:
@@ -123,6 +125,9 @@ def create_app(
 
     @application.middleware("http")
     async def local_security_headers(request: Request, call_next):
+        """限制写请求来源，并为所有响应补充浏览器安全头。"""
+
+        # 第一步：带 Origin 的写请求只能来自本机 Web 前端。
         origin = request.headers.get("origin")
         if request.method in {"POST", "PUT", "PATCH", "DELETE"} and origin:
             if not _origin_is_local(origin):
@@ -135,6 +140,7 @@ def create_app(
                         }
                     },
                 )
+        # 第二步：业务处理完成后统一设置响应头，不在各个 Router 中重复配置。
         response = await call_next(request)
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; script-src 'self'; style-src 'self'; "
@@ -159,7 +165,7 @@ def serve() -> None:
 
     import uvicorn
 
-    settings = AppSettings.from_environment()
+    settings = AppSettings()
     uvicorn.run(
         create_app(settings=settings),
         host=settings.host,

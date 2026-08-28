@@ -7,13 +7,7 @@ import pytest
 from coding_agent.database import (
     DatabaseConfigurationError,
     create_database,
-    database_url_from_environment,
 )
-
-
-def test_database_url_is_required_without_a_fallback() -> None:
-    with pytest.raises(DatabaseConfigurationError, match="required"):
-        database_url_from_environment({})
 
 
 def test_production_factory_rejects_sqlite() -> None:

@@ -103,6 +103,9 @@ class TraceWriter:
         self._lock = threading.Lock()
 
     def emit(self, event: str, /, **fields: Any) -> dict[str, Any]:
+        """筛选并追加一条不含敏感字段的诊断事件。"""
+
+        # 第一步：只接收预先声明的事件类型和字段，并对字段值进行安全归一化。
         if event not in EVENT_FIELDS:
             raise ValueError(f"unsupported diagnostic event: {event}")
 
@@ -111,6 +114,7 @@ class TraceWriter:
             if key in EVENT_FIELDS[event] and not _SENSITIVE_NAME.search(key):
                 record[key] = _safe_value(key, value)
 
+        # 第二步：在同一把锁内写文件和可选流，保证并发运行不会交叉写坏 JSONL。
         line = json.dumps(record, ensure_ascii=False, allow_nan=False, separators=(",", ":"))
         with self._lock:
             if self.path is not None:

@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "coding-agent"
 version = "0.1.0"
-description = "A small, transparent coding agent built from scratch."
+description = "从零构建的小型透明编程智能体。"
 readme = "README.md"
 requires-python = ">=3.11,<3.13"
 dependencies = [

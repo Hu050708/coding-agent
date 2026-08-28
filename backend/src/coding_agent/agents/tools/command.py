@@ -352,6 +352,9 @@ def _stop_process_tree(
     environment: Mapping[str, str],
     process_job: _WindowsKillJob | None,
 ) -> bool:
+    """终止命令及其子进程，并返回进程树清理是否完整成功。"""
+
+    # 第一步：优先使用创建进程时绑定的平台级进程组或 Windows 作业对象。
     if process_job is not None:
         tree_kill_ok = process_job.close()
         if not tree_kill_ok:
@@ -365,6 +368,7 @@ def _stop_process_tree(
         tree_kill_ok = _force_kill_posix_process_group(process.pid) and tree_kill_ok
     else:
         tree_kill_ok = _terminate_process_tree(process, environment)
+    # 第二步：等待正常清理；超时后强制杀死仍存活的主进程。
     try:
         process.wait(timeout=5)
     except subprocess.TimeoutExpired:

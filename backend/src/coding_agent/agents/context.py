@@ -191,6 +191,9 @@ class AgentContextBuilder:
     def _memory_reference(
         self, value: MemoryReference | Mapping[str, Any]
     ) -> MemoryReference:
+        """把外部记忆输入收敛为受长度限制的上下文引用。"""
+
+        # 第一步：只接受强类型对象或恰好包含三个公开字段的映射。
         if isinstance(value, MemoryReference):
             entry = value
         elif isinstance(value, Mapping):
@@ -203,6 +206,7 @@ class AgentContextBuilder:
             )
         else:
             raise TypeError("each memory entry must be MemoryReference or an id/kind/content mapping")
+        # 第二步：限制元数据和正文尺寸，防止单条记忆占满模型上下文。
         if len(entry.id) > 128 or len(entry.kind) > 64:
             raise ValueError("memory metadata exceeds the context limit")
         if len(entry.content) > self.max_memory_item_chars:

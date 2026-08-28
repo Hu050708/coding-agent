@@ -11,8 +11,8 @@ from .service import summarize_file
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Summarize timestamped JSONL logs")
-    parser.add_argument("log_file", type=Path, help="path to a JSONL log file")
+    parser = argparse.ArgumentParser(description="汇总带时间戳的 JSONL 日志")
+    parser.add_argument("log_file", type=Path, help="JSONL 日志文件路径")
     parser.add_argument("--from", dest="from_date", metavar="YYYY-MM-DD")
     parser.add_argument("--to", dest="to_date", metavar="YYYY-MM-DD")
     return parser

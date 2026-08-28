@@ -1,7 +1,7 @@
 """对 Coding Agent 日期边界演示执行独立验收检查。
 
 用法：
-    python evaluation/verify_date_boundary.py PATH_TO_CANDIDATE
+    python evaluation/verify_date_boundary.py <候选目录路径>
 
 候选目录应包含 ``src/logstats`` 和 ``tests``。隐藏夹具创建在该目录之外，并通过
 公共 CLI 执行，因此不会被放入智能体工作区。
@@ -219,7 +219,7 @@ def verify(candidate: Path) -> list[CheckResult]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("candidate", type=Path, help="candidate project directory")
+    parser.add_argument("candidate", type=Path, help="候选项目目录")
     return parser
 
 

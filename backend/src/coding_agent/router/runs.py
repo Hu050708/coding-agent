@@ -14,9 +14,9 @@ from coding_agent.dependencies import get_conversation_run_service
 from coding_agent.router.errors import ApiError
 from coding_agent.schemas import (
     ConversationRunCreateRequest,
-    PersistentApprovalDecisionRequest,
-    PersistentApprovalDecisionResponse,
-    PersistentRunResponse,
+    ApprovalDecisionRequest,
+    ApprovalDecisionResponse,
+    RunResponse,
 )
 from coding_agent.services import ConversationRunService
 from coding_agent.repository import RunEventRecord
@@ -27,7 +27,7 @@ router = APIRouter(tags=["runs"])
 
 @router.post(
     "/conversations/{conversation_id}/runs",
-    response_model=PersistentRunResponse,
+    response_model=RunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
 def create_run(
@@ -44,7 +44,7 @@ def create_run(
     )
 
 
-@router.get("/runs/{run_id}", response_model=PersistentRunResponse)
+@router.get("/runs/{run_id}", response_model=RunResponse)
 def get_run(
     run_id: UUID,
     service: ConversationRunService = Depends(get_conversation_run_service),
@@ -54,7 +54,7 @@ def get_run(
 
 @router.post(
     "/runs/{run_id}/cancel",
-    response_model=PersistentRunResponse,
+    response_model=RunResponse,
     status_code=status.HTTP_202_ACCEPTED,
 )
 def cancel_run(
@@ -66,12 +66,12 @@ def cancel_run(
 
 @router.post(
     "/runs/{run_id}/approvals/{approval_id}",
-    response_model=PersistentApprovalDecisionResponse,
+    response_model=ApprovalDecisionResponse,
 )
 def resolve_approval(
     run_id: UUID,
     approval_id: UUID,
-    payload: PersistentApprovalDecisionRequest,
+    payload: ApprovalDecisionRequest,
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> dict[str, object]:
     return service.resolve_approval(str(run_id), str(approval_id), payload.decision)

@@ -22,11 +22,15 @@ def health(
     settings: AppSettings = Depends(get_settings),
     database: Database = Depends(get_database),
 ) -> dict[str, object]:
+    """汇总 PostgreSQL 与模型供应商的就绪状态。"""
+
+    # 第一步：主动执行轻量数据库查询，区分配置存在和连接真正可用。
     database_state = "ready"
     try:
         database.healthcheck()
     except Exception:
         database_state = "unavailable"
+    # 第二步：数据库和模型都可用才报告 ok，否则保留各子系统状态并报告 degraded。
     provider_ready = manager.ready
     return {
         "status": "ok" if database_state == "ready" and provider_ready else "degraded",

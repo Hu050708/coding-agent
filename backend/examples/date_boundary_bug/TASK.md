@@ -1,16 +1,14 @@
-# Task: fix the inclusive `--to` date boundary
+# 任务：修复包含式 `--to` 日期边界
 
-`logstats` summarizes JSONL log files and accepts inclusive `--from` and `--to`
-calendar dates. Its current `--to YYYY-MM-DD` handling only includes the first
-instant of that date (`00:00:00`).
+`logstats` 用于汇总 JSONL 日志文件，并接受包含边界当天的 `--from` 和 `--to`
+日历日期。当前对 `--to YYYY-MM-DD` 的处理只包含该日期的起始时刻（`00:00:00`）。
 
-Fix the implementation so that `--to` includes the entire named day through
-`23:59:59.999999`, while a record at `00:00:00` on the following day remains
-excluded.
+请修复实现，使 `--to` 包含指定日期截至 `23:59:59.999999` 的全天记录，同时仍排除
+次日 `00:00:00` 的记录。
 
-Requirements:
+要求：
 
-- Add at least one focused regression test for the missing end-of-day behavior.
-- Preserve the CLI arguments, JSON output schema, and all other behavior.
-- Keep the implementation timezone-naive; timezone support is outside this task.
-- Run the full test suite before declaring the task complete.
+- 针对缺失的日末边界行为，至少增加一项有针对性的回归测试。
+- 保持 CLI 参数、JSON 输出结构及所有其他行为不变。
+- 实现继续使用不带时区的时间；时区支持不在本任务范围内。
+- 宣布任务完成前，运行完整测试套件。

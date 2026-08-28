@@ -38,6 +38,7 @@ def search_text(
 ) -> dict[str, Any]:
     """在工作区 UTF-8 文件中搜索单行字面文本。"""
 
+    # 第一步：解析搜索条件和返回预算，提前拒绝多行查询与无效 glob。
     reject_unknown(
         arguments,
         {"query", "path", "glob", "case_sensitive", "max_results", "context_lines"},
@@ -57,6 +58,7 @@ def search_text(
         arguments, "context_lines", default=0, minimum=0, maximum=3
     )
 
+    # 第二步：确定工作区内的搜索起点，并按稳定顺序收集候选文件。
     start = workspace.resolve_existing(
         relative_directory or ".",
         expected="directory",
@@ -79,6 +81,7 @@ def search_text(
     truncated = scan_limit_reached
     needle = query if case_sensitive else query.casefold()
 
+    # 第三步：在文件数、字节数和单文件大小预算内读取 UTF-8 文本。
     for target, relative, size in candidates:
         if len(matches) >= max_results:
             truncated = True
@@ -112,6 +115,7 @@ def search_text(
             skipped_files += 1
             continue
 
+        # 第四步：逐行匹配字面文本，同时构建可选上下文和有界预览。
         lines = text.splitlines()
         for index, line in enumerate(lines):
             haystack = line if case_sensitive else line.casefold()
@@ -148,6 +152,7 @@ def search_text(
         )):
             break
 
+    # 第五步：返回匹配项及扫描统计，让 Agent 能判断结果是否被截断。
     return {
         "data": {"matches": matches},
         "meta": {
@@ -167,6 +172,9 @@ def _candidate_files(
     pattern: str | None,
     max_files: int,
 ) -> tuple[list[tuple[Path, str, int]], bool, int]:
+    """遍历工作区目录，返回满足 glob 的稳定候选文件列表。"""
+
+    # 第一步：使用显式栈遍历目录，限制实际访问的目录项和文件数量。
     candidates: list[tuple[Path, str, int]] = []
     skipped_errors = 0
     limit_reached = False
@@ -181,6 +189,7 @@ def _candidate_files(
         except OSError:
             skipped_errors += 1
             continue
+        # 第二步：跳过受保护路径、链接和非普通文件，并记录无法读取的条目。
         directories: list[Path] = []
         for child in children:
             if visited_entries >= _MAX_DIRECTORY_ENTRIES:
@@ -213,6 +222,7 @@ def _candidate_files(
                 continue
             candidates.append((child_path, relative, size))
         stack.extend(reversed(directories))
+    # 第三步：最终排序与文件系统枚举顺序解耦，保证相同工作区得到稳定结果。
     candidates.sort(key=lambda item: (item[1].casefold(), item[1]))
     return candidates, limit_reached, skipped_errors
 

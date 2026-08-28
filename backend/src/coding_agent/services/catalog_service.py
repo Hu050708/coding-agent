@@ -42,6 +42,9 @@ class CatalogService:
     def create_workspace(
         self, *, path: str, display_name: str | None = None
     ) -> dict[str, Any]:
+        """校验本地目录后，将其登记为 Agent 可操作的工作区。"""
+
+        # 第一步：由工作区策略解析真实路径并确认目录位于允许根目录内。
         try:
             canonical = self.workspace_policy.validate(path)
         except WorkspacePolicyError as exc:
@@ -49,6 +52,7 @@ class CatalogService:
         name = display_name.strip() if display_name is not None else canonical.name
         if not name:
             name = os.fspath(canonical)
+        # 第二步：以规范路径键去重登记，并将持久化冲突转换为 API 可读错误。
         try:
             record = self.persistence.create_workspace(
                 canonical_path=os.fspath(canonical),
@@ -88,6 +92,9 @@ class CatalogService:
         default_permission_mode: str,
         use_memory: bool,
     ) -> dict[str, Any]:
+        """在指定工作区下创建带默认运行设置的会话。"""
+
+        # 第一步：把前端设置原样交给事务服务，并为缺省标题提供用户可见名称。
         try:
             record = self.persistence.create_conversation(
                 workspace_id=workspace_id,
@@ -101,6 +108,7 @@ class CatalogService:
             raise ApplicationError(
                 409, "workspace_unavailable", "The workspace is archived or unavailable."
             ) from exc
+        # 第二步：通过统一 presenter 输出 API 结构，避免路由直接依赖 ORM 模型。
         return conversation_view(record)
 
     def get_conversation(self, conversation_id: str) -> dict[str, Any]:
@@ -121,6 +129,9 @@ class CatalogService:
         default_permission_mode: str | None,
         use_memory: bool | None,
     ) -> dict[str, Any]:
+        """部分更新会话设置并附带当前工作区运行状态。"""
+
+        # 第一步：先读取会话以确定所属工作区，再执行限定工作区的更新。
         try:
             current = self.persistence.get_conversation(conversation_id)
             record = self.persistence.update_conversation(
@@ -135,6 +146,7 @@ class CatalogService:
             raise ApplicationError(
                 404, "conversation_not_found", "Conversation was not found."
             ) from exc
+        # 第二步：将活动运行一并投影到响应，供前端恢复正在进行的任务。
         return conversation_view(record, active_run=active)
 
     def delete_conversation(self, conversation_id: str) -> None:

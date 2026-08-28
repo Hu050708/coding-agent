@@ -17,6 +17,8 @@ from coding_agent.repository import (
 
 
 def workspace_view(record: WorkspaceRecord, *, allowed_root: Path) -> dict[str, Any]:
+    """将工作区记录转换为不暴露完整允许根目录的 API 视图。"""
+
     try:
         relative = Path(record.canonical_path).relative_to(allowed_root)
         path_hint = os.fspath(relative) if relative.parts else "."
@@ -37,6 +39,8 @@ def conversation_view(
     *,
     active_run: RunRecord | None = None,
 ) -> dict[str, Any]:
+    """生成会话视图，并在活动运行属于该会话时附加运行编号。"""
+
     return {
         "id": record.id,
         "workspace_id": record.workspace_id,
@@ -54,6 +58,8 @@ def conversation_view(
 
 
 def message_view(record: MessageRecord) -> dict[str, Any]:
+    """将消息记录转换为稳定的公开字段。"""
+
     return {
         "id": record.id,
         "conversation_id": record.conversation_id,
@@ -66,6 +72,8 @@ def message_view(record: MessageRecord) -> dict[str, Any]:
 
 
 def event_view(record: RunEventRecord) -> dict[str, Any]:
+    """将可重放运行事件转换为 SSE/API 共用视图。"""
+
     return {
         "seq": record.seq,
         "event": record.event,
@@ -75,6 +83,8 @@ def event_view(record: RunEventRecord) -> dict[str, Any]:
 
 
 def memory_view(record: MemoryEntryRecord) -> dict[str, Any]:
+    """将长期记忆记录转换为前端可编辑视图。"""
+
     return {
         "id": record.id,
         "workspace_id": record.workspace_id,

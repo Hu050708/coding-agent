@@ -34,6 +34,9 @@ class WorkspacePolicy:
         self.allowed_root = root
 
     def validate(self, value: str) -> Path:
+        """返回白名单根目录内已存在工作区的规范绝对路径。"""
+
+        # 第一步：检查输入形式并要求用户显式提供绝对路径。
         if not isinstance(value, str) or not value.strip():
             raise WorkspacePolicyError("workspace_invalid", "Workspace must be a non-empty path.")
         if len(value) > 1024 or "\x00" in value or any(ord(character) < 32 for character in value):
@@ -41,12 +44,14 @@ class WorkspacePolicy:
         candidate = Path(value.strip()).expanduser()
         if not candidate.is_absolute():
             raise WorkspacePolicyError("workspace_not_absolute", "Workspace must be an absolute path.")
+        # 第二步：解析链接后的真实路径，并确认目标是现有目录。
         try:
             resolved = candidate.resolve(strict=True)
         except (OSError, RuntimeError) as exc:
             raise WorkspacePolicyError("workspace_not_found", "Workspace directory does not exist.") from exc
         if not resolved.is_dir():
             raise WorkspacePolicyError("workspace_not_directory", "Workspace must be a directory.")
+        # 第三步：比较规范路径的公共前缀，拒绝跨盘符或白名单之外的目录。
         try:
             common = os.path.commonpath((_normalized(self.allowed_root), _normalized(resolved)))
         except ValueError as exc:

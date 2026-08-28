@@ -9,10 +9,10 @@ import time
 from typing import Any
 from uuid import uuid4
 
+from coding_agent.agents.config import AgentConfig
 from coding_agent.agents.contracts import (
     AdapterProtocolError,
     AdapterRequestError,
-    AgentConfig,
     AgentStatus,
     AssistantMessage,
     CompletionAdapter,
@@ -154,6 +154,7 @@ class Agent:
         ) -> RunResult:
             """从任意退出分支统一生成终态事件和不可变运行结果。"""
 
+            # 第一步：计算非负耗时，并发送供 UI 和持久化层消费的统一终态事件。
             duration = max(0.0, self._clock() - started_at)
             self._emit(
                 "run_finished",
@@ -166,6 +167,7 @@ class Agent:
                 usage=usage.as_dict(),
                 duration_ms=round(duration * 1000),
             )
+            # 第二步：复制完整消息历史，防止返回后的内部列表变化污染运行结果。
             return RunResult(
                 run_id=run_id,
                 status=status,

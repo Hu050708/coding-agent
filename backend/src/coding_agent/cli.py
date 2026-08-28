@@ -39,20 +39,20 @@ EXIT_CANCELLED = 130
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="coding-agent",
-        description="Run the Coding Agent local coding-agent loop in one workspace.",
+        description="在一个工作区中运行 Coding Agent 本地智能体循环。",
     )
-    parser.add_argument("task", help="Programming task given to the model.")
+    parser.add_argument("task", help="交给模型的编程任务。")
     parser.add_argument(
         "--workspace",
         default=".",
         metavar="PATH",
-        help="Workspace root (default: current directory).",
+        help="工作区根目录（默认值：当前目录）。",
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"Model ID (default: {DEFAULT_MODEL}).")
+    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"模型 ID（默认值：{DEFAULT_MODEL}）。")
     parser.add_argument(
         "--base-url",
         default=DEFAULT_BASE_URL,
-        help=f"OpenAI-compatible API base URL (default: {DEFAULT_BASE_URL}).",
+        help=f"兼容 OpenAI 的 API 基础 URL（默认值：{DEFAULT_BASE_URL}）。",
     )
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
     parser.add_argument("--max-model-calls", type=int, default=16)
@@ -65,13 +65,13 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_TIMEOUT_SECONDS,
         metavar="SECONDS",
     )
-    parser.add_argument("--retries", type=int, default=3, help="Maximum transient retries per model turn.")
+    parser.add_argument("--retries", type=int, default=3, help="每轮模型请求的最大瞬时错误重试次数。")
     parser.add_argument(
         "--yes",
         action="store_true",
-        help="Auto-approve CONFIRM commands; DENY commands remain denied.",
+        help="自动批准需要确认的命令；禁止的命令仍会被拒绝。",
     )
-    parser.add_argument("--no-trace", action="store_true", help="Disable local diagnostic JSONL output.")
+    parser.add_argument("--no-trace", action="store_true", help="禁用本地诊断 JSONL 输出。")
     return parser
 
 

@@ -77,20 +77,25 @@ def _optional_nonnegative_int(value: Any, field_name: str) -> int:
 
 
 def _normalize_usage(raw_usage: Any) -> TokenUsage:
+    """把供应商用量字段转换为稳定的核心 TokenUsage。"""
+
     if raw_usage is None:
         return TokenUsage()
+    # 第一步：读取提示词和输出令牌；缺失字段按零处理。
     prompt_tokens = _optional_nonnegative_int(
         _field(raw_usage, "prompt_tokens", None), "prompt_tokens"
     )
     completion_tokens = _optional_nonnegative_int(
         _field(raw_usage, "completion_tokens", None), "completion_tokens"
     )
+    # 第二步：供应商未给总量时由两个分项确定性计算。
     raw_total = _field(raw_usage, "total_tokens", None)
     total_tokens = (
         prompt_tokens + completion_tokens
         if raw_total is None
         else _optional_nonnegative_int(raw_total, "total_tokens")
     )
+    # 第三步：补齐 DeepSeek 提供的缓存命中与未命中统计。
     return TokenUsage(
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
@@ -124,6 +129,9 @@ def _normalize_tool_call(raw_call: Any) -> ToolCall:
 
 
 def _normalize_assistant(raw_message: Any) -> AssistantMessage:
+    """规范化助手正文、思考内容和 function tool calls。"""
+
+    # 第一步：确认消息角色，并读取两个可选文本字段。
     role = _field(raw_message, "role")
     if role != "assistant":
         raise AdapterProtocolError("chat completion message role must be assistant")
@@ -131,6 +139,7 @@ def _normalize_assistant(raw_message: Any) -> AssistantMessage:
     reasoning_content = _optional_text(
         _field(raw_message, "reasoning_content", None), "reasoning_content"
     )
+    # 第二步：工具调用必须是序列，并逐项转换为核心 ToolCall。
     raw_tool_calls = _field(raw_message, "tool_calls", None)
     if raw_tool_calls is None:
         tool_calls: tuple[ToolCall, ...] = ()
@@ -138,6 +147,7 @@ def _normalize_assistant(raw_message: Any) -> AssistantMessage:
         if isinstance(raw_tool_calls, (str, bytes)) or not isinstance(raw_tool_calls, Sequence):
             raise AdapterProtocolError("tool_calls must be a sequence or null")
         tool_calls = tuple(_normalize_tool_call(call) for call in raw_tool_calls)
+    # 第三步：构造不可变消息，后续由 Agent 决定写入历史或执行工具。
     return AssistantMessage(
         content=content,
         reasoning_content=reasoning_content,

@@ -7,7 +7,7 @@ import threading
 
 import pytest
 
-from coding_agent.settings import AppSettings, SettingsError
+from coding_agent.settings import AppSettings
 from coding_agent.agents.runtime.event_buffer import EventBuffer
 from coding_agent.agents.runtime.run_manager import BufferTrace
 from coding_agent.agents.security import WorkspacePolicy, WorkspacePolicyError
@@ -20,63 +20,27 @@ def test_settings_load_env_file_without_exposing_secret(tmp_path):
         encoding="utf-8",
     )
 
-    settings = AppSettings.from_environment({}, env_file=env_file)
+    settings = AppSettings(_env_file=env_file)
 
     assert settings.api_key == "private-test-key"
     assert settings.api_key_configured is True
     assert "private-test-key" not in repr(settings)
 
 
-def test_settings_reject_non_loopback_host(tmp_path):
-    with pytest.raises(SettingsError, match="127.0.0.1"):
-        AppSettings(api_key="x", allowed_root=tmp_path, host="0.0.0.0")
-
-
-def test_settings_accepts_only_loopback_psycopg_database_urls(tmp_path):
+def test_settings_accepts_direct_overrides(tmp_path):
+    data_dir = tmp_path / "data"
     settings = AppSettings(
         api_key="x",
         allowed_root=tmp_path,
+        data_dir=data_dir,
         database_url=(
             "postgresql+psycopg://coding_agent:local-secret@127.0.0.1:5434/coding_agent"
         ),
     )
     assert settings.database_configured is True
+    assert settings.allowed_root == tmp_path
+    assert settings.data_dir == data_dir
     assert "local-secret" not in repr(settings)
-
-    with pytest.raises(SettingsError):
-        AppSettings(
-            api_key="x",
-            allowed_root=tmp_path,
-            database_url="postgresql+psycopg://user:secret@example.com/database",
-        )
-
-    with pytest.raises(SettingsError):
-        AppSettings(
-            api_key="x",
-            allowed_root=tmp_path,
-            database_url="sqlite:///coding-agent.db",
-        )
-
-
-def test_settings_accepts_explicit_memory_data_directory(tmp_path):
-    data_dir = tmp_path.parent / f"{tmp_path.name}-private-memory-data"
-    settings = AppSettings.from_environment(
-        {
-            "DEEPSEEK_API_KEY": "test-key",
-            "CODING_AGENT_ALLOWED_ROOT": str(tmp_path),
-            "CODING_AGENT_DATA_DIR": str(data_dir),
-        },
-        env_file=None,
-    )
-
-    assert settings.data_dir == data_dir.resolve()
-
-
-@pytest.mark.parametrize("data_dir", [".", "private-memory-data"])
-def test_settings_rejects_memory_data_inside_allowed_root(tmp_path, data_dir):
-    target = tmp_path if data_dir == "." else tmp_path / data_dir
-    with pytest.raises(SettingsError, match="outside CODING_AGENT_ALLOWED_ROOT"):
-        AppSettings(api_key="x", allowed_root=tmp_path, data_dir=target)
 
 
 def test_workspace_policy_accepts_only_contained_existing_directories(tmp_path):

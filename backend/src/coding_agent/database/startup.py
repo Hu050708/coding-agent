@@ -6,12 +6,14 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session, sessionmaker
 
 from coding_agent.models import ACTIVE_RUN_STATUSES, Approval, ApprovalStatus, Run, RunStatus
-from coding_agent.repository.repositories import RunEventRepository, utc_now
+from coding_agent.repository.base import utc_now
+from coding_agent.repository.event_repo import RunEventRepository
 
 
 def interrupt_stale_runs(session_factory: sessionmaker[Session]) -> int:
     """原子地将重启前的活动运行和审批标记为终态。"""
 
+    # 第一步：锁定所有遗留活动运行，确保多实例恢复时只有一个事务负责对账。
     now = utc_now()
     active_values = [item.value for item in ACTIVE_RUN_STATUSES]
     with session_factory.begin() as session:
@@ -27,6 +29,7 @@ def interrupt_stale_runs(session_factory: sessionmaker[Session]) -> int:
         )
         if not run_ids:
             return 0
+        # 第二步：批量把运行标为 interrupted，并写入统一的重启原因。
         session.execute(
             update(Run)
             .where(Run.id.in_(run_ids))
@@ -39,6 +42,7 @@ def interrupt_stale_runs(session_factory: sessionmaker[Session]) -> int:
                 updated_at=now,
             )
         )
+        # 第三步：取消这些运行尚未处理的审批，避免前端继续显示可操作状态。
         session.execute(
             update(Approval)
             .where(
@@ -51,6 +55,7 @@ def interrupt_stale_runs(session_factory: sessionmaker[Session]) -> int:
                 updated_at=now,
             )
         )
+        # 第四步：为每个运行追加可重放事件，使 SSE 客户端能观察到恢复结果。
         events = RunEventRepository(session)
         for run_id in run_ids:
             events.append_safe_event(

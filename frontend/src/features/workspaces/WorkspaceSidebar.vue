@@ -156,6 +156,10 @@ onMounted(() => void workspaces.load())
     </nav>
 
     <div class="sidebar-footer">
+      <RouterLink class="footer-action" to="/workflow" @click="emit('closeMobile')">
+        <AppIcon name="terminal" />
+        <span>工作流程</span>
+      </RouterLink>
       <RouterLink class="footer-action" to="/evaluations" @click="emit('closeMobile')">
         <AppIcon name="beaker" />
         <span>评测结果</span>

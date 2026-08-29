@@ -12,10 +12,12 @@
 - DeepSeek `/beta` strict 不是安全边界，普通模式仍必须本地验证 JSON、类型、未知字段和路径。
 - thinking + tools 要完整回传本次运行中每个 assistant tool turn 的原始 `reasoning_content`。首版通过有限轮次、token 预算和工具输出限长控制上下文，不做模型摘要。
 
-## 为什么工具写入分成 create 与 replace
+## 为什么文件生命周期拆成四个工具
 
+- `make_directory` 幂等创建目录，可创建缺失父目录，但拒绝受保护路径和任一路径链接。
 - `write_file` 只创建，通过同卷临时文件与 fail-if-exists 原子发布避免竞态覆盖。
 - `replace_text` 必须携带最近读取的 SHA-256，且字面文本恰好匹配一次；状态改变就要求重读。Windows 不提供通用文件 CAS，最终替换前仍有极短 TOCTOU 窗口，不能夸大为绝对安全。
+- `delete_file` 只删除普通文件，要求最近读取哈希并在删除前复核；`ask` 和 `agent` 都需审批，不开放递归目录删除。
 
 ## 为什么增加原生 search_text
 
@@ -66,7 +68,7 @@
 
 ## 三档权限为什么要按 run 冻结
 
-- `ask` 对文件修改和命令逐次审批；`agent` 自动执行常规工作区操作，只审批风险命令；
+- `ask` 对文件修改和命令逐次审批；`agent` 自动执行常规工作区操作，但删除文件和风险命令仍需审批；
   `workspace_full` 自动执行工作区内所有非禁止操作。三者都不能绕过 `DENY`、工作区边界、预算或取消。
 - 权限值随 run 持久化并在后端构造 ToolRegistry 时生效，切换前端下拉框不会改变已经开始的 run。
 - 这是应用级能力控制，不是 OS sandbox；被批准的程序仍可能访问当前用户有权访问的工作区外资源。

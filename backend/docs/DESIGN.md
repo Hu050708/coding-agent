@@ -130,7 +130,7 @@ backend/src/coding_agent/
     agent.py                # 状态机、消息历史和终止循环
     providers/deepseek.py   # API 请求、响应整理、错误分类
     diagnostics/trace.py    # 简单的脱敏 JSONL 运行记录
-    tools/                  # 六个工具的 schema、分发与实现
+    tools/                  # 八个工具的 schema、分发与实现
     security/               # 工作区、命令分级和三档权限
     runtime/                # 运行生命周期、审批、取消和实时事件
     memory/                 # Agent 记忆数据、提示和 CLI 记忆服务
@@ -153,8 +153,8 @@ backend/src/coding_agent/
   最多一个活动 run，不同工作区可以并行。
 - SSE 先按 `Last-Event-ID` 从 PostgreSQL 重放，再用进程内通知降低实时延迟。重启时未完成 run 被标为
   `interrupted` 并追加可重放事件，而不是伪装成可恢复执行。
-- 每个 run 冻结一种后端权限：`ask` 对文件修改和命令逐次审批；`agent` 自动执行工作区修改和
-  常规检查，只审批风险命令；`workspace_full` 自动执行工作区内所有非禁止操作。所有模式始终
+- 每个 run 冻结一种后端权限：`ask` 对文件修改和命令逐次审批；`agent` 自动执行常规工作区修改和
+  检查，但删除文件与风险命令仍需审批；`workspace_full` 自动执行工作区内所有非禁止操作。所有模式始终
   拒绝越界路径和 `DENY` 命令。
 - 前端按 `app / features / shared` 分层，并使用 Vue Router + Pinia；workspace、conversation、chat、
   run、permission、memory 各自拥有类型、API、状态和组件。
@@ -247,7 +247,7 @@ INITIALIZING
 {"ok": false, "error": {"code": "...", "message": "...", "retryable": false}}
 ```
 
-### 6.1 P0 五个工具
+### 6.1 八个固定工具
 
 #### `list_files`
 
@@ -262,6 +262,16 @@ INITIALIZING
 - 返回内容、编码/BOM、换行风格、SHA-256 和截断信息。
 - 默认最多约 20K 字符，超出时要求分段读取。
 
+#### `search_text`
+
+- 在工作区 UTF-8 文件中执行单行字面文本搜索，不通过 shell 或外部 `rg`。
+- 限制扫描文件数、总字节数、单文件大小、结果量和输出字符数；稳定排序且不跟随目录链接。
+
+#### `make_directory`
+
+- 安全且幂等地创建相对目录，默认同时创建缺失父目录。
+- 受保护路径、文件冲突、工作区逃逸以及任一路径组件中的 symlink/junction 均拒绝。
+
 #### `write_file`
 
 - 只创建不存在的新文件，不提供由模型自行声明的覆盖开关。
@@ -275,6 +285,12 @@ INITIALIZING
 - 默认要求恰好匹配一次；hash 不符、0 次或多次均不写文件。
 - 保留原 UTF-8 BOM 与 CRLF/LF；与 `write_file` 共用原子写路径。
 
+#### `delete_file`
+
+- 只删除普通文件，不删除目录或跟随链接；受保护路径始终拒绝。
+- 必须携带最近 `read_file` 返回的 SHA-256，删除前重新解析并复核大小和哈希。
+- `ask` 与 `agent` 模式都要求确认；只有 `workspace_full` 可免确认，硬拒绝规则仍有效。
+
 #### `run_command`
 
 - 参数：`argv: list[str]`、相对 `cwd`、超时。
@@ -282,13 +298,6 @@ INITIALIZING
 - 输出先写有界临时存储，再只读取头尾，不能先全量读进内存后截断。
 - 按 bytes 限制，优先 UTF-8，失败时使用系统编码并替换非法字节。
 - Windows 超时采用经测试的尽力进程树清理；不宣称对所有孙进程有强保证。
-
-### 6.2 P1 工具
-
-`search_text` 已作为第六个工具实现。它在工作区 UTF-8 文件中执行单行字面文本搜索，支持相对目录、
-glob、大小写开关、结果上限和最多三行上下文。扫描文件数、总字节数、单文件大小和输出字符数均有
-独立上限；稳定排序，不跟随目录链接，并复用 `Workspace` 的受保护路径规则。它不通过 shell 或
-外部 `rg` 执行，在三档权限中均属于自动执行的只读工具。
 
 ## 7. Windows 路径与受保护文件
 

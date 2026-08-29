@@ -45,7 +45,17 @@ DEFAULT_SYSTEM_PROMPT = """你是一个本地编程智能体。仅使用提供�
 """
 
 _UNKNOWN_TOOL_NAME = "unknown_tool"
-_PATH_TOOLS = frozenset({"list_files", "read_file", "search_text", "write_file", "replace_text"})
+_PATH_TOOLS = frozenset(
+    {
+        "list_files",
+        "read_file",
+        "search_text",
+        "make_directory",
+        "write_file",
+        "replace_text",
+        "delete_file",
+    }
+)
 
 
 def _tool_started_display_fields(
@@ -80,6 +90,13 @@ def _tool_result_summary(tool_name: str, result: str) -> str | None:
     data = raw_data if isinstance(raw_data, Mapping) else {}
     meta = raw_meta if isinstance(raw_meta, Mapping) else {}
     target = summarize_target(data.get("path"))
+    if tool_name == "make_directory" and target:
+        created = meta.get("created")
+        if created is True:
+            return f"创建目录 {target}"
+        if created is False:
+            return f"目录已存在 {target}"
+        return None
     if tool_name == "write_file" and target:
         size = meta.get("size_bytes")
         suffix = f" · {size:,} B" if isinstance(size, int) and not isinstance(size, bool) else ""
@@ -88,6 +105,10 @@ def _tool_result_summary(tool_name: str, result: str) -> str | None:
         replacements = data.get("replacements")
         suffix = f" · {replacements} 处替换" if isinstance(replacements, int) else ""
         return f"修改 {target}{suffix}"
+    if tool_name == "delete_file" and target:
+        size = meta.get("size_bytes")
+        suffix = f" · {size:,} B" if isinstance(size, int) and not isinstance(size, bool) else ""
+        return f"删除 {target}{suffix}"
     if tool_name == "read_file" and target:
         lines = meta.get("total_lines")
         suffix = f" · {lines} 行" if isinstance(lines, int) else ""

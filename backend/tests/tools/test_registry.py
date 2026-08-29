@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -24,14 +25,16 @@ def decode(payload: str) -> dict:
     return value
 
 
-def test_registry_exposes_exactly_six_independent_schemas(tmp_path: Path) -> None:
+def test_registry_exposes_exactly_eight_independent_schemas(tmp_path: Path) -> None:
     registry = ToolRegistry(Workspace(tmp_path))
     expected = {
         "list_files",
         "read_file",
         "search_text",
+        "make_directory",
         "write_file",
         "replace_text",
+        "delete_file",
         "run_command",
     }
     assert {schema["function"]["name"] for schema in registry.schemas} == expected
@@ -48,8 +51,10 @@ def test_ask_mode_exposes_writes_but_requires_approval(tmp_path: Path) -> None:
         "list_files",
         "read_file",
         "search_text",
+        "make_directory",
         "write_file",
         "replace_text",
+        "delete_file",
         "run_command",
     }
 
@@ -72,7 +77,36 @@ def test_ask_mode_can_approve_one_file_write(tmp_path: Path) -> None:
     assert result["ok"] is True
     assert (tmp_path / "x.txt").read_text(encoding="utf-8") == "x"
     assert observed[0].tool_name == "write_file"
-    assert observed[0].action_summary == "写入 x.txt"
+    assert observed[0].action_summary == "创建文件 x.txt"
+
+
+def test_directory_creation_and_deletion_follow_destructive_approval_policy(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "obsolete.txt"
+    target.write_text("old", encoding="utf-8")
+    observed = []
+    registry = ToolRegistry(
+        Workspace(tmp_path),
+        permission_mode=PermissionMode.AGENT,
+        confirm_action=lambda request: observed.append(request) or True,
+    )
+
+    made = decode(registry.execute("make_directory", {"path": "generated/java"}))
+    deleted = decode(
+        registry.execute(
+            "delete_file",
+            {
+                "path": "obsolete.txt",
+                "expected_sha256": hashlib.sha256(b"old").hexdigest(),
+            },
+        )
+    )
+
+    assert made["ok"] is True
+    assert deleted["ok"] is True
+    assert [request.tool_name for request in observed] == ["delete_file"]
+    assert observed[0].action_summary == "删除文件 obsolete.txt"
 
 
 def test_permission_mode_and_legacy_auto_approve_cannot_conflict(tmp_path: Path) -> None:

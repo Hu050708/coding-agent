@@ -114,4 +114,4 @@ def test_fake_model_drives_real_search_read_edit_test_loop(tmp_path):
     assert tool_payloads[0]["data"]["matches"][0]["path"] == "mathutil.py"
     assert tool_payloads[-1]["data"]["exit_code"] == 0
     assert "private-call-read" == adapter.requests[2]["messages"][-2]["reasoning_content"]
-    assert len(adapter.requests[0]["tools"]) == 6
+    assert len(adapter.requests[0]["tools"]) == 8

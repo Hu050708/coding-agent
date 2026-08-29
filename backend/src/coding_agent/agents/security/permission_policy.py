@@ -39,12 +39,15 @@ _WORKSPACE_TOOLS = frozenset(
         "list_files",
         "read_file",
         "search_text",
+        "make_directory",
         "write_file",
         "replace_text",
+        "delete_file",
         "run_command",
     }
 )
-_WRITE_TOOLS = frozenset({"write_file", "replace_text"})
+_WRITE_TOOLS = frozenset({"make_directory", "write_file", "replace_text", "delete_file"})
+_DESTRUCTIVE_TOOLS = frozenset({"delete_file"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -84,11 +87,13 @@ class PermissionPolicy:
         """计算非命令工具在当前模式下的执行决定。
 
         :param name: 模型请求的工具名称。
-        :return: 未知工具拒绝，询问模式下写工具需确认，其他固定工具允许。
+        :return: 未知工具拒绝；删除默认确认；询问模式下所有修改工具确认。
         """
 
         if name not in self.tool_names:
             return CommandDecision.DENY
+        if name in _DESTRUCTIVE_TOOLS and self.mode is not PermissionMode.WORKSPACE_FULL:
+            return CommandDecision.CONFIRM
         if self.mode is PermissionMode.ASK and name in _WRITE_TOOLS:
             return CommandDecision.CONFIRM
         return CommandDecision.ALLOW

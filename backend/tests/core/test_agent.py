@@ -352,6 +352,28 @@ def test_invalid_registry_results_are_replaced_before_history(bad_result):
     assert bad_result != result.messages[3]["content"]
 
 
+def test_new_file_lifecycle_tools_have_bounded_trace_summaries():
+    from coding_agent.agents.agent import (
+        _tool_result_summary,
+        _tool_started_display_fields,
+    )
+
+    assert _tool_started_display_fields(
+        "make_directory", {"path": "src/main/java", "parents": True}
+    ) == {"target": "src/main/java"}
+    assert _tool_started_display_fields(
+        "delete_file", {"path": "obsolete.txt", "expected_sha256": "a" * 64}
+    ) == {"target": "obsolete.txt"}
+    assert _tool_result_summary(
+        "make_directory",
+        '{"ok":true,"data":{"path":"src"},"meta":{"created":true}}',
+    ) == "创建目录 src"
+    assert _tool_result_summary(
+        "delete_file",
+        '{"ok":true,"data":{"path":"obsolete.txt"},"meta":{"size_bytes":12}}',
+    ) == "删除 obsolete.txt · 12 B"
+
+
 def test_tool_completed_trace_uses_registry_command_metadata_shape():
     registry = FakeRegistry(
         {

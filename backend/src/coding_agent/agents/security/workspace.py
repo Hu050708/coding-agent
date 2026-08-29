@@ -193,6 +193,24 @@ class Workspace:
         reparse_flag = getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400)
         return path.is_symlink() or bool(attributes & reparse_flag)
 
+    def _ensure_no_reparse_components(self, parts: Sequence[str]) -> None:
+        """拒绝路径中任何已存在的符号链接或 Windows 重解析点。
+
+        创建目录和删除文件属于结构性修改，不允许借助工作区内链接间接改变目标。
+
+        :param parts: 已校验的工作区相对路径片段。
+        :raises WorkspaceError: 任一现有路径组件是链接或重解析点。
+        """
+
+        current = self.root
+        for part in parts:
+            current = current / part
+            if os.path.lexists(current) and self.is_reparse_point(current):
+                raise WorkspaceError(
+                    "reparse_point_not_allowed",
+                    "Directory creation and file deletion do not follow links.",
+                )
+
     def resolve_existing(
         self,
         relative: str,
@@ -357,6 +375,85 @@ class Workspace:
                 digest.update(chunk)
         return digest.hexdigest()
 
+    def create_directory(
+        self, relative: str, *, parents: bool = True
+    ) -> tuple[Path, int]:
+        """安全创建一个工作区目录，并可按顺序创建缺失父目录。
+
+        已存在的普通目录按幂等成功处理。任一路径组件是文件、链接、受保护路径或
+        解析到工作区之外时都会拒绝；创建中途失败会尽力移除本次创建的空目录。
+
+        :param relative: 要创建的工作区相对目录路径。
+        :param parents: 是否同时创建缺失的父目录。
+        :return: 规范目录路径和本次实际创建的目录数量。
+        :raises WorkspaceError: 路径不安全、父目录缺失或目录创建失败。
+        """
+
+        parts = self.relative_parts(relative)
+        if not parts:
+            raise WorkspaceError("invalid_path", "A non-root directory path is required.")
+        self._check_protected(parts, operation="write")
+        self._ensure_no_reparse_components(parts)
+        created: list[Path] = []
+        current = self.root
+        try:
+            for index, part in enumerate(parts):
+                lexical = self.root.joinpath(*parts[: index + 1])
+                if os.path.lexists(lexical):
+                    self._ensure_no_reparse_components(parts[: index + 1])
+                    try:
+                        resolved = lexical.resolve(strict=True)
+                    except (OSError, RuntimeError) as exc:
+                        raise WorkspaceError(
+                            "unresolvable_path", "The directory path cannot be resolved safely."
+                        ) from exc
+                    self._ensure_contained(resolved)
+                    if not resolved.is_dir():
+                        raise WorkspaceError(
+                            "parent_not_directory",
+                            "A directory path component is not a directory.",
+                        )
+                    current = resolved
+                    continue
+
+                if not parents and index != len(parts) - 1:
+                    raise WorkspaceError(
+                        "parent_not_found", "The target parent directory does not exist."
+                    )
+                candidate = current / part
+                self._ensure_contained(candidate)
+                try:
+                    candidate.mkdir()
+                    created.append(candidate)
+                except FileExistsError:
+                    # 并发创建按幂等成功处理，但仍须重新验证类型和链接属性。
+                    pass
+                except OSError as exc:
+                    raise WorkspaceError(
+                        "directory_create_failed", "The directory could not be created."
+                    ) from exc
+                self._ensure_no_reparse_components(parts[: index + 1])
+                try:
+                    resolved = lexical.resolve(strict=True)
+                except (OSError, RuntimeError) as exc:
+                    raise WorkspaceError(
+                        "unresolvable_path", "The created directory cannot be resolved safely."
+                    ) from exc
+                self._ensure_contained(resolved)
+                if not resolved.is_dir():
+                    raise WorkspaceError(
+                        "parent_not_directory", "The created path is not a directory."
+                    )
+                current = resolved
+            return current, len(created)
+        except Exception:
+            for directory in reversed(created):
+                try:
+                    directory.rmdir()
+                except OSError:
+                    pass
+            raise
+
     def atomic_create(self, relative: str, data: bytes) -> Path:
         """原子发布新文件，任何情况下都不覆盖已有目标。
 
@@ -444,6 +541,86 @@ class Workspace:
                 temporary.unlink(missing_ok=True)
             except OSError:
                 pass
+
+    def delete_file(
+        self,
+        relative: str,
+        *,
+        expected_sha256: str,
+        max_file_bytes: int,
+    ) -> tuple[str, int]:
+        """仅在普通文件内容未变化时删除一个工作区文件。
+
+        :param relative: 待删除文件的工作区相对路径。
+        :param expected_sha256: 最近一次读取获得的完整文件哈希。
+        :param max_file_bytes: 允许删除的文件大小上限。
+        :return: 删除前的规范相对路径和字节数。
+        :raises WorkspaceError: 文件越界、受保护、过大、变化或无法删除。
+        """
+
+        parts = self.relative_parts(relative)
+        if not parts:
+            raise WorkspaceError("invalid_path", "A file path is required.")
+        self._check_protected(parts, operation="write")
+        self._ensure_no_reparse_components(parts)
+        target = self.resolve_existing(
+            relative,
+            expected="file",
+            allow_reparse=False,
+            operation="write",
+        )
+        try:
+            size = target.stat().st_size
+        except OSError as exc:
+            raise WorkspaceError("file_stat_failed", "The file metadata could not be read.") from exc
+        if size > max_file_bytes:
+            raise WorkspaceError(
+                "file_too_large", f"The file exceeds the {max_file_bytes}-byte deletion limit."
+            )
+        if self.sha256_path(target) != expected_sha256:
+            raise WorkspaceError(
+                "stale_file",
+                "The file changed after it was read; read it again before deleting.",
+                retryable=True,
+            )
+        label = self.relative_label(target)
+
+        # 删除前重新解析路径、拒绝链接并复核大小和哈希，降低检查与使用间的竞态风险。
+        self._ensure_no_reparse_components(parts)
+        try:
+            current = self.resolve_existing(
+                relative,
+                expected="file",
+                allow_reparse=False,
+                operation="write",
+            )
+        except WorkspaceError as exc:
+            if exc.code == "path_not_found":
+                raise WorkspaceError(
+                    "stale_file",
+                    "The file disappeared before deletion.",
+                    retryable=True,
+                ) from exc
+            raise
+        try:
+            current_size = current.stat().st_size
+        except OSError as exc:
+            raise WorkspaceError("file_stat_failed", "The file metadata could not be read.") from exc
+        if current != target or current_size != size or self.sha256_path(current) != expected_sha256:
+            raise WorkspaceError(
+                "stale_file",
+                "The file changed before deletion; read it again before deleting.",
+                retryable=True,
+            )
+        try:
+            current.unlink()
+        except FileNotFoundError as exc:
+            raise WorkspaceError(
+                "stale_file", "The file disappeared before deletion.", retryable=True
+            ) from exc
+        except OSError as exc:
+            raise WorkspaceError("file_delete_failed", "The file could not be deleted.") from exc
+        return label, size
 
     # ------------------------------------------------------------------
     # 子进程环境与命令策略

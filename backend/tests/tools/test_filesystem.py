@@ -114,6 +114,58 @@ def test_read_file_rejects_non_text(name: str, content: bytes, code: str, tmp_pa
     assert response["error"]["code"] == code
 
 
+def test_make_directory_creates_parents_and_is_idempotent(tmp_path: Path) -> None:
+    registry = make_registry(tmp_path)
+
+    created = decode(registry.execute("make_directory", {"path": "src/main/java"}))
+    assert created == {
+        "ok": True,
+        "data": {"path": "src/main/java"},
+        "meta": {"created": True, "created_count": 3},
+    }
+    assert (tmp_path / "src" / "main" / "java").is_dir()
+
+    repeated = decode(registry.execute("make_directory", {"path": "src/main/java"}))
+    assert repeated["ok"] is True
+    assert repeated["meta"] == {"created": False, "created_count": 0}
+
+
+def test_make_directory_can_require_an_existing_parent(tmp_path: Path) -> None:
+    registry = make_registry(tmp_path)
+    missing = decode(
+        registry.execute("make_directory", {"path": "missing/child", "parents": False})
+    )
+    assert missing["ok"] is False
+    assert missing["error"]["code"] == "parent_not_found"
+    assert not (tmp_path / "missing").exists()
+
+    (tmp_path / "existing").mkdir()
+    created = decode(
+        registry.execute("make_directory", {"path": "existing/child", "parents": False})
+    )
+    assert created["ok"] is True
+    assert (tmp_path / "existing" / "child").is_dir()
+
+
+def test_make_directory_rejects_file_components_and_links(tmp_path: Path) -> None:
+    (tmp_path / "file").write_text("x", encoding="utf-8")
+    registry = make_registry(tmp_path)
+    collision = decode(registry.execute("make_directory", {"path": "file/child"}))
+    assert collision["ok"] is False
+    assert collision["error"]["code"] == "parent_not_directory"
+
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    try:
+        os.symlink(outside, tmp_path / "link", target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    linked = decode(registry.execute("make_directory", {"path": "link/child"}))
+    assert linked["ok"] is False
+    assert linked["error"]["code"] == "reparse_point_not_allowed"
+    assert not (outside / "child").exists()
+
+
 def test_write_file_is_utf8_create_only_and_never_overwrites(tmp_path: Path) -> None:
     registry = make_registry(tmp_path)
     created = decode(registry.execute("write_file", {"path": "new.txt", "content": "你好\r\n"}))
@@ -182,6 +234,95 @@ def test_replace_text_requires_fresh_hash_unique_match_and_preserves_format(tmp_
     assert stale["error"]["code"] == "stale_file"
 
 
+def test_delete_file_requires_fresh_read_hash_and_only_deletes_regular_file(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "obsolete.txt"
+    target.write_text("remove me", encoding="utf-8")
+    registry = ToolRegistry(Workspace(tmp_path), permission_mode="workspace_full")
+    read = decode(registry.execute("read_file", {"path": "obsolete.txt"}))
+
+    deleted = decode(
+        registry.execute(
+            "delete_file",
+            {
+                "path": "obsolete.txt",
+                "expected_sha256": read["meta"]["sha256"],
+            },
+        )
+    )
+    assert deleted["ok"] is True
+    assert deleted["data"] == {"path": "obsolete.txt", "deleted": True}
+    assert deleted["meta"]["size_bytes"] == len(b"remove me")
+    assert not target.exists()
+
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    rejected = decode(
+        registry.execute(
+            "delete_file",
+            {"path": "directory", "expected_sha256": hashlib.sha256(b"").hexdigest()},
+        )
+    )
+    assert rejected["ok"] is False
+    assert rejected["error"]["code"] == "not_a_file"
+    assert directory.is_dir()
+
+
+def test_delete_file_rejects_stale_hash_without_removing_content(tmp_path: Path) -> None:
+    target = tmp_path / "changing.txt"
+    target.write_text("before", encoding="utf-8")
+    registry = ToolRegistry(Workspace(tmp_path), permission_mode="workspace_full")
+    stale_hash = hashlib.sha256(b"before").hexdigest()
+    target.write_text("after", encoding="utf-8")
+
+    response = decode(
+        registry.execute(
+            "delete_file", {"path": "changing.txt", "expected_sha256": stale_hash}
+        )
+    )
+    assert response["ok"] is False
+    assert response["error"] == {
+        "code": "stale_file",
+        "message": "The file changed after it was read; read it again before deleting.",
+        "retryable": True,
+    }
+    assert target.read_text(encoding="utf-8") == "after"
+
+
+def test_delete_file_rejects_oversized_files_and_links(tmp_path: Path) -> None:
+    target = tmp_path / "large.txt"
+    target.write_bytes(b"12345")
+    registry = ToolRegistry(
+        Workspace(tmp_path), permission_mode="workspace_full", max_file_bytes=4
+    )
+    oversized = decode(
+        registry.execute(
+            "delete_file",
+            {"path": "large.txt", "expected_sha256": hashlib.sha256(b"12345").hexdigest()},
+        )
+    )
+    assert oversized["ok"] is False
+    assert oversized["error"]["code"] == "file_too_large"
+    assert target.exists()
+
+    link = tmp_path / "link.txt"
+    try:
+        os.symlink(target, link)
+    except (OSError, NotImplementedError) as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    linked = decode(
+        registry.execute(
+            "delete_file",
+            {"path": "link.txt", "expected_sha256": hashlib.sha256(b"12345").hexdigest()},
+        )
+    )
+    assert linked["ok"] is False
+    assert linked["error"]["code"] == "reparse_point_not_allowed"
+    assert link.exists()
+    assert target.exists()
+
+
 @pytest.mark.parametrize(("content", "old", "matches"), [("abc", "x", 0), ("x x", "x", 2)])
 def test_replace_text_rejects_zero_or_multiple_matches(
     tmp_path: Path, content: str, old: str, matches: int
@@ -209,9 +350,10 @@ def test_replace_text_rejects_zero_or_multiple_matches(
 def test_all_file_tools_reject_protected_paths(tmp_path: Path) -> None:
     (tmp_path / ".git").mkdir()
     (tmp_path / ".git" / "config").write_text("x", encoding="utf-8")
-    registry = make_registry(tmp_path)
+    registry = make_registry(tmp_path, auto_approve=True)
     for tool, arguments in (
         ("read_file", {"path": ".git/config"}),
+        ("make_directory", {"path": ".git/new-directory"}),
         ("write_file", {"path": ".git/new", "content": "x"}),
         (
             "replace_text",
@@ -219,6 +361,13 @@ def test_all_file_tools_reject_protected_paths(tmp_path: Path) -> None:
                 "path": ".git/config",
                 "old_text": "x",
                 "new_text": "y",
+                "expected_sha256": hashlib.sha256(b"x").hexdigest(),
+            },
+        ),
+        (
+            "delete_file",
+            {
+                "path": ".git/config",
                 "expected_sha256": hashlib.sha256(b"x").hexdigest(),
             },
         ),

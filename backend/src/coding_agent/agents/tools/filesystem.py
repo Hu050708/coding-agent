@@ -13,6 +13,7 @@ from coding_agent.agents.security.workspace import Workspace, WorkspaceError
 
 from .contracts import (
     ToolError,
+    optional_boolean,
     optional_integer,
     optional_string,
     reject_unknown,
@@ -185,6 +186,29 @@ def read_file(
     }
 
 
+def make_directory(workspace: Workspace, arguments: Mapping[str, Any]) -> dict[str, Any]:
+    """安全且幂等地创建一个工作区目录。
+
+    :param workspace: 提供路径、保护规则和链接边界的工作区对象。
+    :param arguments: 目录路径及是否创建缺失父目录。
+    :return: 规范目录路径和实际创建数量。
+    :raises ToolError: 参数类型或长度不合法。
+    :raises WorkspaceError: 目录路径越界、受保护、链接化或无法创建。
+    """
+
+    reject_unknown(arguments, {"path", "parents"})
+    relative = require_string(arguments, "path", max_length=1024)
+    parents = optional_boolean(arguments, "parents", default=True)
+    target, created_count = workspace.create_directory(relative, parents=parents)
+    return {
+        "data": {"path": workspace.relative_label(target)},
+        "meta": {
+            "created": created_count > 0,
+            "created_count": created_count,
+        },
+    }
+
+
 def write_file(
     workspace: Workspace,
     arguments: Mapping[str, Any],
@@ -314,6 +338,43 @@ def replace_text(
     }
 
 
+def delete_file(
+    workspace: Workspace,
+    arguments: Mapping[str, Any],
+    *,
+    max_file_bytes: int = 2_000_000,
+) -> dict[str, Any]:
+    """在最近读取的哈希仍匹配时删除一个普通工作区文件。
+
+    :param workspace: 提供路径边界、链接拒绝和删除前复核的工作区对象。
+    :param arguments: 文件路径和最近一次 ``read_file`` 返回的 SHA-256。
+    :param max_file_bytes: 允许删除的文件大小上限。
+    :return: 删除路径以及删除前哈希和大小元数据。
+    :raises ToolError: 参数或哈希格式不合法。
+    :raises WorkspaceError: 文件越界、受保护、变化、过大或无法删除。
+    """
+
+    reject_unknown(arguments, {"path", "expected_sha256"})
+    relative = require_string(arguments, "path", max_length=1024)
+    expected_sha256 = require_string(
+        arguments, "expected_sha256", max_length=64
+    ).lower()
+    if re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None:
+        raise ToolError(
+            "invalid_sha256",
+            "expected_sha256 must contain exactly 64 hexadecimal characters.",
+        )
+    path, size = workspace.delete_file(
+        relative,
+        expected_sha256=expected_sha256,
+        max_file_bytes=max_file_bytes,
+    )
+    return {
+        "data": {"path": path, "deleted": True},
+        "meta": {"sha256": expected_sha256, "size_bytes": size},
+    }
+
+
 def _read_limited(path: Path, limit: int) -> bytes:
     """读取不超过指定字节上限的完整文件。
 
@@ -436,4 +497,11 @@ def _dir_entry_is_reparse(entry: os.DirEntry[str]) -> bool:
     return entry.is_symlink() or bool(attributes & reparse_flag)
 
 
-__all__ = ["list_files", "read_file", "replace_text", "write_file"]
+__all__ = [
+    "delete_file",
+    "list_files",
+    "make_directory",
+    "read_file",
+    "replace_text",
+    "write_file",
+]

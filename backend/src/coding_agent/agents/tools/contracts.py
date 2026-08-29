@@ -112,6 +112,26 @@ def optional_string(
     return value
 
 
+def optional_boolean(
+    arguments: Mapping[str, Any], name: str, *, default: bool
+) -> bool:
+    """读取一个可选布尔参数。
+
+    :param arguments: 工具参数映射。
+    :param name: 参数名称。
+    :param default: 参数缺失时使用的布尔值。
+    :return: 默认值或通过严格类型校验的布尔值。
+    :raises ToolError: 已提供的值不是布尔类型。
+    """
+
+    if name not in arguments:
+        return default
+    value = arguments[name]
+    if not isinstance(value, bool):
+        raise ToolError("invalid_argument", f"{name} must be a boolean.")
+    return value
+
+
 def optional_integer(
     arguments: Mapping[str, Any],
     name: str,
@@ -202,6 +222,7 @@ __all__ = [
     "CancellationCheck",
     "ToolConfirmation",
     "ToolError",
+    "optional_boolean",
     "optional_integer",
     "optional_number",
     "optional_string",

@@ -118,6 +118,31 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "make_directory",
+            "description": (
+                "安全且幂等地创建工作区目录。默认同时创建缺失的父目录；"
+                "不会跟随符号链接或 Windows 重解析点。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "相对工作区的非根目录路径。",
+                    },
+                    "parents": {
+                        "type": "boolean",
+                        "description": "是否同时创建缺失父目录，默认 true。",
+                    },
+                },
+                "required": ["path"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "write_file",
             "description": (
                 "原子创建一个新的 UTF-8 文件。该工具绝不覆盖已有文件；"
@@ -164,6 +189,32 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
                     },
                 },
                 "required": ["path", "old_text", "new_text", "expected_sha256"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": (
+                "删除一个最近读取且内容未变化的普通工作区文件。"
+                "必须提供 read_file 返回的 SHA-256；不支持目录或链接。"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "相对工作区的普通文件路径。",
+                    },
+                    "expected_sha256": {
+                        "type": "string",
+                        "pattern": "^[0-9a-fA-F]{64}$",
+                        "description": "最近一次 read_file 调用返回的 SHA-256。",
+                    },
+                },
+                "required": ["path", "expected_sha256"],
                 "additionalProperties": False,
             },
         },

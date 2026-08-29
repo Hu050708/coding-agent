@@ -7,6 +7,7 @@ import math
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from coding_agent.agents.diagnostics.trace import summarize_target
 from coding_agent.agents.security import (
     CommandDecision,
     PermissionMode,
@@ -28,7 +29,14 @@ from .contracts import (
     require_string,
     validate_json_value,
 )
-from .filesystem import list_files, read_file, replace_text, write_file
+from .filesystem import (
+    delete_file,
+    list_files,
+    make_directory,
+    read_file,
+    replace_text,
+    write_file,
+)
 from .search import search_text
 from .schemas import TOOL_SCHEMAS, schemas_for_permission
 
@@ -37,7 +45,7 @@ ToolHandler = Callable[[dict[str, Any], float | None], dict[str, Any]]
 
 
 class ToolRegistry:
-    """包含六个固定工具、显式校验并返回 JSON 结果的注册表。"""
+    """包含八个固定工具、显式校验并返回 JSON 结果的注册表。"""
 
     def __init__(
         self,
@@ -62,7 +70,7 @@ class ToolRegistry:
         :param permission_mode: 本次运行冻结的权限模式；省略时由兼容选项推导。
         :param auto_approve: 旧版自动审批开关，等价于 ``workspace_full`` 模式。
         :param max_read_chars: 单次读取返回给模型的最大字符数。
-        :param max_file_bytes: 可读取或替换的单个文件最大字节数。
+        :param max_file_bytes: 可读取、替换或删除的单个文件最大字节数。
         :param max_write_chars: 单次新建或替换内容允许包含的最大字符数。
         :param max_command_output_bytes: 命令标准输出和错误输出各自的捕获上限。
         :raises ValueError: 权限选项冲突或同时提供两个审批回调。
@@ -79,7 +87,7 @@ class ToolRegistry:
                 raise ValueError("auto_approve conflicts with the selected permission mode")
         if confirm_action is not None and confirm_command is not None:
             raise ValueError("pass confirm_action or confirm_command, not both")
-        # 第二步：保存统一限制，并为五种固定工具绑定本工作区的隔离处理器。
+        # 第二步：保存统一限制，并为八种固定工具绑定本工作区的隔离处理器。
         self.workspace = workspace
         self.confirm_action = confirm_action or confirm_command
         self.cancel_check = cancel_check
@@ -103,6 +111,9 @@ class ToolRegistry:
                 arguments,
                 max_file_bytes=max_file_bytes,
             ),
+            "make_directory": lambda arguments, _timeout_seconds: make_directory(
+                workspace, arguments
+            ),
             "write_file": lambda arguments, _timeout_seconds: write_file(
                 workspace,
                 arguments,
@@ -113,6 +124,9 @@ class ToolRegistry:
                 arguments,
                 max_file_bytes=max_file_bytes,
                 max_new_chars=max_write_chars,
+            ),
+            "delete_file": lambda arguments, _timeout_seconds: delete_file(
+                workspace, arguments, max_file_bytes=max_file_bytes
             ),
             "run_command": lambda arguments, timeout_seconds: run_command(
                 workspace,
@@ -205,13 +219,17 @@ class ToolRegistry:
         # 第一步：只有策略判定为 confirm 的工具才构造审批请求。
         if self.permission_policy.tool_decision(name) is not CommandDecision.CONFIRM:
             return
-        path = arguments.get("path")
-        label = path if isinstance(path, str) and path else "工作区文件"
-        verb = "写入" if name == "write_file" else "修改"
+        label = summarize_target(arguments.get("path")) or "工作区"
+        verb = {
+            "make_directory": "创建目录",
+            "write_file": "创建文件",
+            "replace_text": "修改文件",
+            "delete_file": "删除文件",
+        }.get(name, "修改工作区")
         request = ToolApprovalRequest(
             tool_name=name,
             action_summary=f"{verb} {label}",
-            reason="当前权限要求在修改文件前确认。",
+            reason="当前权限要求在修改工作区前确认。",
         )
         if self.confirm_action is None:
             raise ToolError("tool_confirmation_required", request.reason)

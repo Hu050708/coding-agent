@@ -1,4 +1,4 @@
-"""供 FastAPI 和运行集成使用、负责会话生命周期的持久化门面。"""
+"""消息、Agent 运行、事件和审批的数据库操作。"""
 
 from __future__ import annotations
 
@@ -70,15 +70,9 @@ class RunCreation:
 
 
 class PersistenceService:
-    """返回脱离会话的不可变记录，并负责所有事务边界。"""
+    """返回脱离会话的记录，并负责数据库事务。"""
 
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
-        """初始化持久化门面。
-
-        :param session_factory: 为每次方法调用创建独立事务会话的工厂。
-        """
-
-        # 只保存会话工厂，绝不跨请求复用 ORM Session。
         self.session_factory = session_factory
 
     def create_workspace(
@@ -780,6 +774,23 @@ class PersistenceService:
                 raise PersistenceConflictError("approval is no longer pending")
             return approval_record(approvals.resolve(approval_id, status=expected))
 
+    @staticmethod
+    def _user_message_for_run(session: Session, run_id: UUID) -> Message | None:
+        """在当前事务中查找运行绑定的用户消息。
+
+        :param session: 当前 SQLAlchemy 会话。
+        :param run_id: 运行 UUID。
+        :return: 活动用户消息实体；不存在时为 None。
+        """
+
+        return session.scalar(
+            select(Message).where(
+                Message.run_id == run_id,
+                Message.role == "user",
+                Message.deleted_at.is_(None),
+            )
+        )
+
     def create_memory(
         self,
         *,
@@ -967,27 +978,5 @@ class PersistenceService:
                 for item in MemoryRepository(session).list_snapshot(run_id)
             ]
 
-    @staticmethod
-    def _user_message_for_run(session: Session, run_id: UUID) -> Message | None:
-        """在当前事务中查找运行绑定的用户消息。
 
-        :param session: 当前 SQLAlchemy 会话。
-        :param run_id: 运行 UUID。
-        :return: 活动用户消息实体；不存在时为 None。
-        """
-
-        return session.scalar(
-            select(Message).where(
-                Message.run_id == run_id,
-                Message.role == "user",
-                Message.deleted_at.is_(None),
-            )
-        )
-
-
-__all__ = [
-    "PersistenceConflictError",
-    "PersistenceNotFoundError",
-    "PersistenceService",
-    "RunCreation",
-]
+__all__ = ["PersistenceService", "RunCreation"]

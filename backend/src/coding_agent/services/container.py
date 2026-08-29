@@ -37,9 +37,9 @@ class ApplicationServices:
         workspace_policy: WorkspacePolicy,
         benchmark_runs_dir: Path,
     ) -> "ApplicationServices":
-        """使用共享基础设施依赖组装全部业务服务。
+        """使用共享对象创建全部业务服务。
 
-        :param persistence: 数据库事务门面。
+        :param persistence: 数据库操作对象。
         :param manager: 内存 Agent 运行协调器。
         :param workspace_policy: 文件系统工作区边界策略。
         :return: 可挂载到 FastAPI 应用状态的服务容器。

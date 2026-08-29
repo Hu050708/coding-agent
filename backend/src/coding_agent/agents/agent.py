@@ -26,7 +26,7 @@ from coding_agent.agents.contracts import (
     TraceEmitter,
 )
 from coding_agent.agents.context import AgentContext
-from coding_agent.agents.diagnostics import summarize_argv, summarize_target
+from coding_agent.agents.diagnostics.trace import summarize_argv, summarize_target
 from coding_agent.agents.progress import RepeatedToolExchangeDetector
 from coding_agent.agents.tool_protocol import (
     add_progress_warning as _add_progress_warning,

@@ -9,7 +9,7 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from coding_agent.agents.config import AgentConfig
-from coding_agent.agents.providers import (
+from coding_agent.agents.providers.deepseek import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,

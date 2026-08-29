@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response, status
 
 from coding_agent.dependencies import get_workspace_memory_service
-from coding_agent.schemas import (
+from coding_agent.schemas.memories import (
     WorkspaceMemoryCreateRequest,
     WorkspaceMemoryListResponse,
     WorkspaceMemoryPurgeResponse,

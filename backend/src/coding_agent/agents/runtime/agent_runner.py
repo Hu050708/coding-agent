@@ -20,8 +20,8 @@ from coding_agent.agents import (
     TraceEmitter,
     VisibleMessage,
 )
-from coding_agent.agents.diagnostics import TraceWriter
-from coding_agent.agents.providers import DeepSeekAdapter
+from coding_agent.agents.diagnostics.trace import TraceWriter
+from coding_agent.agents.providers.deepseek import DeepSeekAdapter
 from coding_agent.agents.security import PermissionMode, ToolApprovalRequest, Workspace
 from coding_agent.agents.tools import ToolRegistry
 from coding_agent.agents.memory import MemoryService, MemorySummary

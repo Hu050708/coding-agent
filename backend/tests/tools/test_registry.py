@@ -11,7 +11,7 @@ import pytest
 from coding_agent.agents.security import PermissionMode, Workspace
 from coding_agent.agents.tools import TOOL_SCHEMAS, ToolError, ToolRegistry
 from coding_agent.agents.tools.command import ToolError as CommandToolError
-from coding_agent.agents.tools.contracts import ToolError as ContractToolError
+from coding_agent.agents.tools.contracts import ToolError as ValidationToolError
 from coding_agent.agents.tools.filesystem import ToolError as FilesystemToolError
 from coding_agent.agents.tools.registry import TOOL_SCHEMAS as RegistrySchemas
 from coding_agent.agents.tools.registry import ToolError as RegistryToolError
@@ -85,9 +85,9 @@ def test_permission_mode_and_legacy_auto_approve_cannot_conflict(tmp_path: Path)
 
 
 def test_modular_contracts_keep_compatibility_reexports() -> None:
-    assert ToolError is ContractToolError is RegistryToolError
-    assert CommandToolError is ContractToolError
-    assert FilesystemToolError is ContractToolError
+    assert ToolError is ValidationToolError is RegistryToolError
+    assert CommandToolError is ValidationToolError
+    assert FilesystemToolError is ValidationToolError
     assert TOOL_SCHEMAS is SchemaModuleSchemas is RegistrySchemas
 
 

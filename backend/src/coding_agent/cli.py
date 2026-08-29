@@ -13,13 +13,13 @@ import json
 import os
 from pathlib import Path
 import sys
-from typing import Any, Callable, TextIO
+from typing import Callable, TextIO
 from urllib.parse import urlsplit
 from uuid import uuid4
 
 from coding_agent.agents import Agent, AgentConfig, AgentStatus
-from coding_agent.agents.diagnostics import NullTrace, TraceWriter
-from coding_agent.agents.providers import (
+from coding_agent.agents.diagnostics.trace import NullTrace, TraceWriter
+from coding_agent.agents.providers.deepseek import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,

@@ -24,20 +24,9 @@ from .presenters import (
 
 
 class CatalogService:
-    """实现工作区、会话和可见消息用例。"""
+    """实现工作区、会话和可见消息操作。"""
 
-    def __init__(
-        self,
-        persistence: PersistenceService,
-        workspace_policy: WorkspacePolicy,
-    ) -> None:
-        """初始化目录服务及受限文件夹浏览器。
-
-        :param persistence: 负责工作区、会话和消息事务的持久化门面。
-        :param workspace_policy: 负责工作区路径边界校验的安全策略。
-        """
-
-        # 两项共享依赖分别负责数据库事务与文件系统信任边界。
+    def __init__(self, persistence: PersistenceService, workspace_policy: WorkspacePolicy) -> None:
         self.persistence = persistence
         self.workspace_policy = workspace_policy
         self.browser = DirectoryBrowser(workspace_policy)

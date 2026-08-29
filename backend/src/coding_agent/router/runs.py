@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 
 from coding_agent.dependencies import get_conversation_run_service
 from coding_agent.router.errors import ApiError
-from coding_agent.schemas import (
+from coding_agent.schemas.runs import (
     ConversationRunCreateRequest,
     ApprovalDecisionRequest,
     ApprovalDecisionResponse,

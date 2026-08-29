@@ -11,8 +11,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from coding_agent.services import ApplicationServices
-from coding_agent.router.errors import install_error_handlers
 from coding_agent.router import api_router
+from coding_agent.router.errors import install_error_handlers
 from coding_agent.settings import AppSettings
 from coding_agent.database import (
     Database,
@@ -56,10 +56,10 @@ def create_app(
     """构建可注入运行器和管理器边界的应用，便于离线测试。
 
     :param settings: 可选应用配置；省略时从环境和 ``.env`` 加载。
-    :param runner: 可选 Agent 执行适配器，常用于测试替身。
+    :param runner: 可选 Agent 执行器，常用于测试替身。
     :param manager: 可选进程内运行管理器；注入时生命周期归调用方所有。
     :param database: 可选数据库封装；注入时不会由应用释放。
-    :param persistence: 可选持久化门面；默认由数据库会话工厂构建。
+    :param persistence: 可选数据库操作对象；默认由数据库会话工厂构建。
     :param migrate_database: 是否在自建数据库连接前自动迁移到最新版。
     :return: 已配置中间件、路由、错误处理和生命周期的 FastAPI 应用。
     """

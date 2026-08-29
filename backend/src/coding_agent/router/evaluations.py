@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from coding_agent.dependencies import get_evaluation_report_service
-from coding_agent.schemas import EvaluationRunListResponse, EvaluationRunResponse
+from coding_agent.schemas.evaluations import EvaluationRunListResponse, EvaluationRunResponse
 from coding_agent.services import EvaluationReportService
 
 

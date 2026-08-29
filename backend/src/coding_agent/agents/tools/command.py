@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, BinaryIO, Callable, Mapping
 
 from coding_agent.agents.security import PermissionPolicy, ToolApprovalRequest
-from coding_agent.agents.security.command_policy import CommandDecision, CommandRequest
+from coding_agent.agents.security.command_policy import CommandDecision
 from coding_agent.agents.security.workspace import Workspace
 
 from .contracts import (

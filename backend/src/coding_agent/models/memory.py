@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -16,15 +15,19 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     Uuid,
     func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, SAFE_JSON, SoftDeleteMixin, TimestampMixin
-from .enums import PermissionMode, RunStatus
+from .base import Base, SoftDeleteMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from .run import Run
+    from .workspace import Workspace
+
+
 class MemoryEntry(TimestampMixin, SoftDeleteMixin, Base):
     """可启用、置顶并按内容去重的工作区记忆。"""
 

@@ -1,4 +1,4 @@
-"""集中导出内置工具的契约、数据模型、注册表和实现。"""
+"""集中导出内置工具的数据模型、注册表和实现。"""
 
 from .contracts import ToolError
 from .registry import ToolRegistry

@@ -2,44 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from datetime import datetime
-import hashlib
-from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from coding_agent.models import (
     Approval,
     ApprovalStatus,
-    Conversation,
-    MemoryEntry,
-    MemoryKind,
-    MemorySource,
-    Message,
-    MessageRole,
-    PermissionMode,
-    Run,
-    RunEvent,
-    RunMemory,
-    RunStatus,
-    Workspace,
 )
 
 from .base import (
-    MAX_MEMORY_CHARS,
-    MAX_MEMORY_CONTENT_CHARS,
-    MAX_MEMORY_ENTRIES,
     UUIDLike,
     PersistenceConflictError,
     PersistenceNotFoundError,
-    _required_text,
-    _validate_run_transition,
     as_uuid,
     utc_now,
 )
-from .safe_events import safe_approval_data, sanitize_run_event
+from .safe_events import safe_approval_data
 class ApprovalRepository:
     """管理工具审批的创建、锁定和一次性状态转换。"""
 

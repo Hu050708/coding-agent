@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -13,18 +13,19 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
-    Integer,
     String,
-    Text,
-    UniqueConstraint,
     Uuid,
-    func,
-    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, SAFE_JSON, SoftDeleteMixin, TimestampMixin
-from .enums import PermissionMode, RunStatus
+from .base import Base, SoftDeleteMixin, TimestampMixin
+from .enums import PermissionMode
+
+if TYPE_CHECKING:
+    from .run import Message, Run
+    from .workspace import Workspace
+
+
 class Conversation(TimestampMixin, SoftDeleteMixin, Base):
     """工作区内按消息序号维护上下文的持久化会话。"""
 

@@ -1,4 +1,4 @@
-"""与模型供应商无关的 Coding Agent 契约和状态机。"""
+"""Coding Agent 核心数据和主循环。"""
 
 from coding_agent.agents.agent import DEFAULT_SYSTEM_PROMPT, Agent
 from coding_agent.agents.config import AgentConfig

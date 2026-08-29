@@ -7,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from coding_agent.dependencies import get_catalog_service
-from coding_agent.schemas import (
+from coding_agent.schemas.workspaces import (
     DirectoryBrowseResponse,
     WorkspaceCreateRequest,
     WorkspaceListResponse,

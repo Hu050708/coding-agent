@@ -3,28 +3,27 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    BigInteger,
-    Boolean,
     CheckConstraint,
     DateTime,
-    ForeignKey,
     Index,
-    Integer,
     String,
     Text,
-    UniqueConstraint,
     Uuid,
-    func,
     text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from .base import Base, SAFE_JSON, SoftDeleteMixin, TimestampMixin
-from .enums import PermissionMode, RunStatus
+from .base import Base, SoftDeleteMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from .conversation import Conversation
+    from .memory import MemoryEntry
+
+
 class Workspace(TimestampMixin, SoftDeleteMixin, Base):
     """可登记并承载会话、运行和记忆的规范工作区。"""
 

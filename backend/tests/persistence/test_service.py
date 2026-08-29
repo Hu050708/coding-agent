@@ -13,7 +13,7 @@ from coding_agent.repository import (
     PersistenceNotFoundError,
 )
 from coding_agent.database import interrupt_stale_runs
-from coding_agent.models import RunStatus
+from coding_agent.repository import RunStatus
 
 
 def _conversation(service):

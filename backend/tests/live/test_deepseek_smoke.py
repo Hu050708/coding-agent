@@ -12,7 +12,7 @@ from uuid import uuid4
 import pytest
 
 from coding_agent.agents import Agent, AgentConfig, AgentStatus
-from coding_agent.agents.providers import DeepSeekAdapter
+from coding_agent.agents.providers.deepseek import DeepSeekAdapter
 from coding_agent.agents.security import Workspace
 from coding_agent.agents.tools import ToolRegistry
 

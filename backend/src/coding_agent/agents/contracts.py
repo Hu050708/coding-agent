@@ -1,4 +1,4 @@
-"""Coding Agent 核心层共享的供应商无关契约。"""
+"""Coding Agent 核心使用的数据类型和简单接口。"""
 
 from __future__ import annotations
 
@@ -183,9 +183,9 @@ class ModelCompletion:
 
 @runtime_checkable
 class CompletionAdapter(Protocol):
-    """规定所有“大模型适配器”必须长什么样的一份接口规范"""
+    """模型客户端需要实现的方法。"""
 
-    # 当前适配器实际请求的模型名称。
+    # 当前客户端实际请求的模型名称。
     model: str
 
     def complete(
@@ -199,8 +199,8 @@ class CompletionAdapter(Protocol):
 
         :param messages: 按协议顺序排列的系统、用户、助手和工具消息。
         :param tools: 本轮允许模型调用的 OpenAI 兼容函数工具 Schema。
-        :param timeout_seconds: 本次网络请求允许等待的秒数；为空时使用适配器默认值。
-        :return: 与具体模型供应商无关的规范化补全结果。
+        :param timeout_seconds: 本次网络请求允许等待的秒数；为空时使用客户端默认值。
+        :return: 统一格式的模型回复。
         """
 
         ...

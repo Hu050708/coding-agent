@@ -7,7 +7,7 @@ import os
 from fastapi import APIRouter, Depends
 
 from coding_agent.dependencies import get_database, get_run_manager, get_settings
-from coding_agent.schemas import HealthResponse
+from coding_agent.schemas.system import HealthResponse
 from coding_agent.settings import AppSettings
 from coding_agent.database import Database
 from coding_agent.agents.runtime.run_manager import RunManager

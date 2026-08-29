@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 
 from coding_agent.agents.security import WorkspacePolicy, WorkspacePolicyError
 

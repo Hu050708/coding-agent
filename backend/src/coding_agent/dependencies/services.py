@@ -57,17 +57,13 @@ def get_application_services(request: Request) -> ApplicationServices:
 
 
 def get_catalog_service(request: Request) -> CatalogService:
-    """取得负责工作区和会话目录的业务服务。
-
-    :param request: 当前 HTTP 请求。
-    :return: 目录业务服务。
-    """
+    """取得工作区、会话和消息服务。"""
 
     return get_application_services(request).catalog
 
 
 def get_conversation_run_service(request: Request) -> ConversationRunService:
-    """取得负责消息及运行生命周期的业务服务。
+    """取得 Agent 运行服务。
 
     :param request: 当前 HTTP 请求。
     :return: 会话运行业务服务。
@@ -95,8 +91,8 @@ def get_evaluation_report_service(request: Request) -> EvaluationReportService:
 __all__ = [
     "get_application_services",
     "get_catalog_service",
-    "get_conversation_run_service",
     "get_database",
+    "get_conversation_run_service",
     "get_evaluation_report_service",
     "get_run_manager",
     "get_settings",

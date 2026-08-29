@@ -52,7 +52,7 @@ class BenchmarkRunner:
         model: str,
         wall_time_seconds: float | None = None,
     ) -> tuple[TrialResult, ...]:
-        """执行全部任务轮次；单轮基础设施失败不会丢失其他结果。"""
+        """执行全部任务轮次；单轮运行失败不会丢失其他结果。"""
 
         self.output.mkdir(parents=True, exist_ok=False)
         trials: list[TrialResult] = []

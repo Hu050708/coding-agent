@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import (
@@ -24,7 +24,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, SAFE_JSON, SoftDeleteMixin, TimestampMixin
-from .enums import PermissionMode, RunStatus
+from .enums import RunStatus
+
+if TYPE_CHECKING:
+    from .conversation import Conversation
+    from .memory import RunMemory
+    from .workspace import Workspace
+
+
 class Run(TimestampMixin, SoftDeleteMixin, Base):
     """一次智能体执行的状态、预算、结果和错误投影。"""
 

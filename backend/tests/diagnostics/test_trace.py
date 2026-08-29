@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from coding_agent.agents.diagnostics import TraceWriter, summarize_argv, summarize_target
+from coding_agent.agents.diagnostics.trace import TraceWriter, summarize_argv, summarize_target
 
 
 def test_trace_uses_allowlist_and_removes_sensitive_fields(tmp_path):

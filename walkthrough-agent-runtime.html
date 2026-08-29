@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="zh-CN" style="color-scheme: dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coding Agent 运行流程 Walkthrough</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root { --bg:#000; --surface:#0a0a0a; --raised:#141414; --border:#2a2a2a; --fg:#fff; --muted:#a0a0a0; --accent:#a855f7; --file:#c084fc; --red:#ef4444; }
+    * { box-sizing: border-box; }
+    html, body, #root { width:100%; height:100%; margin:0; overflow:hidden; background:var(--bg); color:var(--fg); }
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button { font:inherit; }
+    .header { position:fixed; inset:0 0 auto; z-index:20; padding:18px 24px 36px; pointer-events:none; background:linear-gradient(#000 35%, transparent); }
+    .header h1 { margin:0; font-size:17px; font-weight:720; letter-spacing:-.01em; }
+    .header p { margin:4px 0 0; color:var(--muted); font-size:13px; }
+    .summary { position:fixed; top:76px; left:24px; z-index:24; max-width:560px; border:1px solid var(--border); background:rgba(10,10,10,.92); box-shadow:0 18px 50px rgba(0,0,0,.45); cursor:pointer; }
+    .summary.compact { border-radius:999px; padding:7px 12px; color:var(--muted); font-size:12px; }
+    .summary.expanded { border-radius:12px; padding:14px 16px; color:#d4d4d4; font-size:13px; line-height:1.65; }
+    .summary small { display:block; margin-top:6px; color:#6f6f6f; }
+    .viewport { width:100%; height:100%; overflow:hidden; cursor:grab; touch-action:none; }
+    .viewport.dragging { cursor:grabbing; }
+    .canvas { display:inline-block; padding:110px 90px 100px; transform-origin:top left; will-change:transform; }
+    .mermaid-wrap svg { max-width:none !important; height:auto !important; }
+    .mermaid-wrap .node { cursor:pointer; }
+    .mermaid-wrap .node:hover rect, .mermaid-wrap .node:hover polygon, .mermaid-wrap .node:hover circle, .mermaid-wrap .node:hover .label-container { filter:brightness(1.28); transition:filter .15s; }
+    .controls { position:fixed; left:22px; bottom:22px; z-index:25; display:flex; align-items:center; gap:5px; padding:6px; border:1px solid var(--border); border-radius:10px; background:var(--surface); box-shadow:0 12px 30px rgba(0,0,0,.4); }
+    .controls button { width:36px; height:36px; border:0; border-radius:7px; color:var(--fg); background:transparent; cursor:pointer; }
+    .controls button:hover, .controls button:focus-visible { outline:none; background:var(--raised); }
+    .controls output { min-width:52px; color:var(--muted); text-align:center; font:12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .legend { position:fixed; left:50%; bottom:22px; z-index:25; display:flex; flex-wrap:wrap; justify-content:center; gap:14px; transform:translateX(-50%); padding:10px 14px; border:1px solid var(--border); border-radius:10px; background:var(--surface); box-shadow:0 12px 30px rgba(0,0,0,.4); }
+    .legend span { display:flex; align-items:center; gap:6px; color:var(--muted); font-size:11px; white-space:nowrap; }
+    .legend i { width:9px; height:9px; border-radius:50%; }
+    .hint { position:fixed; right:22px; bottom:25px; z-index:21; color:#666; font-size:11px; }
+    .hint kbd { padding:2px 5px; border:1px solid #333; border-radius:4px; color:#999; background:#111; }
+    .detail { position:fixed; top:16px; right:16px; bottom:16px; z-index:40; width:min(560px, calc(100vw - 32px)); overflow:hidden; border:1px solid var(--border); border-radius:14px; background:var(--surface); box-shadow:0 24px 80px rgba(0,0,0,.7); }
+    .detail-scroll { height:100%; overflow:auto; padding:24px; }
+    .detail-close { position:absolute; top:12px; right:12px; z-index:2; width:36px; height:36px; border:1px solid var(--border); border-radius:8px; color:var(--muted); background:var(--raised); cursor:pointer; font-size:21px; }
+    .detail-close:hover, .detail-close:focus-visible { color:#fff; background:var(--red); border-color:var(--red); outline:none; }
+    .detail-tag { color:var(--accent); font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+    .detail h2 { margin:7px 44px 10px 0; font-size:21px; letter-spacing:-.02em; }
+    .detail p { margin:0 0 18px; color:var(--muted); font-size:14px; line-height:1.7; }
+    .detail h3 { margin:19px 0 8px; color:#d4d4d4; font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+    .detail .shiki, .detail pre { margin:0; overflow:auto; padding:15px 17px; border:1px solid var(--border); border-radius:9px; background:#000 !important; }
+    .detail code { font:12px/1.6 "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+    .files { display:grid; gap:7px; }
+    .files code { color:var(--file); overflow-wrap:anywhere; }
+    .error { position:fixed; inset:50% auto auto 50%; transform:translate(-50%,-50%); color:#fca5a5; background:#1c0b0b; border:1px solid #7f1d1d; border-radius:10px; padding:16px; }
+    @media (max-width:900px) { .legend { display:none; } .hint { display:none; } .canvas { padding:110px 50px 100px; } .summary { left:16px; } }
+    @media (prefers-reduced-motion:reduce) { *, *::before, *::after { scroll-behavior:auto !important; transition:none !important; } }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="module">
+    import { createHighlighter } from 'https://cdn.jsdelivr.net/npm/shiki@3.22.0/+esm';
+
+    const { useCallback, useEffect, useRef, useState } = window.React;
+    const h = window.React.createElement;
+
+    const SUMMARY = '一次 Web 任务会先以幂等事务写入 PostgreSQL，再由进程内 RunManager 启动隔离的 AgentRunner。核心 Agent 在每轮调用前检查预算，经严格协议解析和权限审批后执行工具，并把工具结果反馈给下一轮；模型停止只代表运行结束，benchmark verifier 才提供独立成功证据。';
+
+    const DIAGRAM = String.raw`
+      graph LR
+        subgraph request["Request & Admission"]
+          userRequest["Task Submission"]
+          durableAdmission["Durable Run Admission"]
+          runtimeControl["Runtime Orchestration"]
+        end
+        subgraph reasoning["Context & Model Loop"]
+          frozenContext["Frozen Context"]
+          budgetGate["Budget & Cancellation Gate"]
+          modelTurn["DeepSeek Model Turn"]
+          protocolDecision["Protocol Decision"]
+        end
+        subgraph tools["Safe Tool Loop"]
+          policyGate["Permission Gate"]
+          approvalPause["Human Approval Pause"]
+          toolBatch["Bounded Tool Batch"]
+        end
+        subgraph evidence["Evidence & Verification"]
+          durableOutcome["Durable Events & Outcome"]
+          independentVerifier["Independent Verifier"]
+        end
+
+        userRequest -->|"creates idempotently"| durableAdmission
+        durableAdmission -->|"starts worker"| runtimeControl
+        runtimeControl -->|"freezes history and memory"| frozenContext
+        frozenContext -->|"builds prompt"| budgetGate
+        budgetGate -->|"within limits"| modelTurn
+        modelTurn -->|"returns normalized turn"| protocolDecision
+        protocolDecision -->|"stop"| durableOutcome
+        protocolDecision -->|"tool calls"| policyGate
+        policyGate -->|"allow"| toolBatch
+        policyGate -->|"confirm"| approvalPause
+        approvalPause -->|"approve or reject"| toolBatch
+        toolBatch -->|"appends tool results"| budgetGate
+        budgetGate -->|"cancel or exhausted"| durableOutcome
+        modelTurn -->|"fatal or malformed"| durableOutcome
+        runtimeControl -.->|"propagates cancellation"| toolBatch
+        approvalPause -.->|"publishes events"| durableOutcome
+        toolBatch -.->|"publishes events"| durableOutcome
+        durableOutcome -.->|"replays through SSE"| userRequest
+        durableOutcome -->|"benchmark only"| independentVerifier
+
+        classDef component fill:#a855f7,stroke:#c084fc,color:#fff
+        classDef composable fill:#7c3aed,stroke:#a78bfa,color:#fff
+        classDef utility fill:#6d28d9,stroke:#8b5cf6,color:#fff
+        classDef external fill:#525252,stroke:#737373,color:#fff
+        classDef event fill:#d8b4fe,stroke:#e9d5ff,color:#000
+        classDef data fill:#9333ea,stroke:#a855f7,color:#fff
+        class userRequest,approvalPause event
+        class durableAdmission,frozenContext,durableOutcome data
+        class runtimeControl,toolBatch component
+        class budgetGate,protocolDecision,policyGate utility
+        class modelTurn,independentVerifier external
+
+        click userRequest nodeClickHandler "View details"
+        click durableAdmission nodeClickHandler "View details"
+        click runtimeControl nodeClickHandler "View details"
+        click frozenContext nodeClickHandler "View details"
+        click budgetGate nodeClickHandler "View details"
+        click modelTurn nodeClickHandler "View details"
+        click protocolDecision nodeClickHandler "View details"
+        click policyGate nodeClickHandler "View details"
+        click approvalPause nodeClickHandler "View details"
+        click toolBatch nodeClickHandler "View details"
+        click durableOutcome nodeClickHandler "View details"
+        click independentVerifier nodeClickHandler "View details"
+    `;
+
+    const NODES = {
+      userRequest: {
+        title: 'Task Submission / 提交任务',
+        type: 'User event',
+        description: 'Pinia Store 先插入乐观用户消息，再携带权限、记忆开关和客户端幂等 ID 创建运行。成功后立即建立 SSE 连接，失败则撤销乐观消息。',
+        files: ['frontend/src/features/runs/store.ts:130', 'frontend/src/features/runs/api.ts:12'],
+        code: `const run = await runApi.create(conversationId, {\n  content: content.trim(),\n  permission_mode: permissionMode,\n  use_memory: useMemory,\n  client_request_id: clientRequestId,`,
+        lang: 'typescript',
+      },
+      durableAdmission: {
+        title: 'Durable Run Admission / 持久化准入',
+        type: 'Persistent state',
+        description: 'ConversationRunService 先检查供应商，再在同一事务中创建运行、用户消息与冻结记忆。重复 client_request_id 只返回原运行，不会重复启动工作线程。',
+        files: ['backend/src/coding_agent/services/run_service.py:353', 'backend/src/coding_agent/repository/service.py'],
+        code: `if creation.created:\n    self._start_runtime(creation, content=content)\nreturn self.get(str(creation.run.id))`,
+        lang: 'python',
+      },
+      runtimeControl: {
+        title: 'Runtime Orchestration / 运行时编排',
+        type: 'Runtime component',
+        description: 'RunManager 在锁内预留工作区、构造事件缓冲与审批代理，然后把同步 Agent 任务提交到有界线程池。它也统一传播取消并保留终态摘要。',
+        files: ['backend/src/coding_agent/agents/runtime/run_manager.py:418'],
+        code: `future = self._executor.submit(\n    self._execute,\n    session,\n    task,`,
+        lang: 'python',
+      },
+      frozenContext: {
+        title: 'Frozen Context / 冻结上下文',
+        type: 'Immutable data',
+        description: 'AgentRunner 使用创建事务冻结的历史和记忆快照构建有限上下文，避免运行过程中数据库变化导致提示词漂移。每次运行都会新建 Adapter、Workspace 和 ToolRegistry。',
+        files: ['backend/src/coding_agent/agents/runtime/agent_runner.py:212', 'backend/src/coding_agent/agents/context.py'],
+        code: `context = self.context_builder.build(\n    config=config,\n    prior_messages=spec.prior_messages,\n    memory_entries=memory_references,\n)`,
+        lang: 'python',
+      },
+      budgetGate: {
+        title: 'Budget & Cancellation Gate / 预算与取消',
+        type: 'Control guard',
+        description: '核心循环在模型调用、重试和工具批次前反复检查取消、墙钟、模型调用、工具调用与 Token 预算。任一边界触发都会走统一 finish 分支。',
+        files: ['backend/src/coding_agent/agents/agent.py:168', 'backend/src/coding_agent/agents/config.py'],
+        code: `if usage.total_tokens >= self.config.max_total_tokens:\n    return finish(\n        AgentStatus.BUDGET_EXHAUSTED,\n        TerminationReason.TOKEN_BUDGET_EXCEEDED,\n    )`,
+        lang: 'python',
+      },
+      modelTurn: {
+        title: 'DeepSeek Model Turn / 模型调用',
+        type: 'External service',
+        description: 'DeepSeekAdapter 禁用 SDK 自动重试，并按剩余墙钟压缩单次超时。供应商响应必须先规范化为内部 ModelCompletion，异常只映射为脱敏的稳定错误。',
+        files: ['backend/src/coding_agent/agents/providers/deepseek.py:247'],
+        code: `response = self.adapter.complete(\n    history,\n    request_tools,\n    timeout_seconds=request_timeout,\n)`,
+        lang: 'python',
+      },
+      protocolDecision: {
+        title: 'Protocol Decision / 协议决策',
+        type: 'Protocol guard',
+        description: 'Agent 只接受 stop 或 tool_calls，并拒绝截断、过滤、重复调用 ID 和不完整工具批次。stop 仅产生 model_final，不等价于任务已通过。',
+        files: ['backend/src/coding_agent/agents/agent.py:168', 'backend/src/coding_agent/agents/contracts.py'],
+        code: `if finish_reason == "length":\n    return finish(AgentStatus.FAILED, TerminationReason.TRUNCATED_RESPONSE)\nif finish_reason == "content_filter":\n    return finish(AgentStatus.FAILED, TerminationReason.CONTENT_FILTERED)`,
+        lang: 'python',
+      },
+      policyGate: {
+        title: 'Permission Gate / 权限决策',
+        type: 'Security policy',
+        description: '不可变 PermissionPolicy 将固定工具集合、命令风险分类和本次运行权限模式组合为 allow、confirm 或 deny。Workspace 路径边界仍是独立的底层防线。',
+        files: ['backend/src/coding_agent/agents/security/permission_policy.py:51', 'backend/src/coding_agent/agents/security/command_policy.py'],
+        code: `if classified is CommandDecision.DENY:\n    return CommandDecision.DENY\nif self.mode is PermissionMode.ASK:\n    return CommandDecision.CONFIRM`,
+        lang: 'python',
+      },
+      approvalPause: {
+        title: 'Human Approval Pause / 人工审批暂停',
+        type: 'Human event',
+        description: '需要确认时，ApprovalBroker 发布一次 approval.required 并用条件变量阻塞工具线程。批准、拒绝、超时和取消都会清除一次性状态并发布终态事件。',
+        files: ['backend/src/coding_agent/agents/runtime/approval_broker.py:71', 'frontend/src/features/chat/components/ApprovalCard.vue'],
+        code: `self._pending_changed(pending)\nself._publish(\n    "approval.required",\n    {"run_id": self.run_id, "approval": pending.as_dict()},\n)`,
+        lang: 'python',
+      },
+      toolBatch: {
+        title: 'Bounded Tool Batch / 有界工具批次',
+        type: 'Tool component',
+        description: '工具按顺序执行，参数先经过严格 JSON 和工具 Schema 校验，再受工作区与权限约束。无论成功、拒绝或失败，都会生成对应 tool 消息反馈给下一轮模型。',
+        files: ['backend/src/coding_agent/agents/tools/registry.py:39', 'backend/src/coding_agent/agents/agent.py:168'],
+        code: `result = self.registry.execute(\n    call.name,\n    arguments,\n    timeout_seconds=remaining,\n)`,
+        lang: 'python',
+      },
+      durableOutcome: {
+        title: 'Durable Events & Outcome / 持久证据',
+        type: 'Persistent evidence',
+        description: '运行事件先经过字段白名单清洗，再以单调序号写入 PostgreSQL；终态同时保存助手消息、原因、调用次数和用量。SSE 可按 after_seq 重放，页面不会把瞬时内存状态当成唯一事实。',
+        files: ['backend/src/coding_agent/repository/event_repo.py:33', 'backend/src/coding_agent/repository/safe_events.py', 'frontend/src/features/runs/events.ts:55'],
+        code: `safe_data = sanitize_run_event(event, data)\nitem = RunEvent(\n    run_id=as_uuid(run_id, label="run_id"),\n    seq=seq,\n    event=event,`,
+        lang: 'python',
+      },
+      independentVerifier: {
+        title: 'Independent Verifier / 独立验收',
+        type: 'External evidence',
+        description: 'BenchmarkRunner 在全新工作区运行同一个 Agent CLI，再由不继承 API 凭据的独立进程执行候选测试和任务黑盒检查。只有 verifier 通过才记为 success。',
+        files: ['backend/evaluation/core/runner.py:35', 'backend/evaluation/core/verifier.py:19'],
+        code: `verification = self._run_verifier(task, workspace, timeout=60)\nclassification = classify_trial(\n    agent_exit_code=agent_exit_code,\n    trace=trace,\n    verification=verification,`,
+        lang: 'python',
+      },
+    };
+
+    const LEGEND = [
+      ['User / approval event', '#d8b4fe'],
+      ['Runtime component', '#a855f7'],
+      ['Policy / protocol guard', '#6d28d9'],
+      ['Persistent data', '#9333ea'],
+      ['External service', '#525252'],
+    ];
+
+    const MERMAID_THEME = { primaryColor:'#0a0a0a', primaryTextColor:'#fff', primaryBorderColor:'#2a2a2a', lineColor:'#a0a0a0', background:'#000' };
+    mermaid.initialize({
+      startOnLoad:false,
+      theme:'dark',
+      securityLevel:'loose',
+      themeVariables:{ ...MERMAID_THEME, secondaryColor:'#000', tertiaryColor:'#000', mainBkg:'#0a0a0a', nodeBorder:'#2a2a2a', clusterBkg:'rgba(10,10,10,.84)', clusterBorder:'#7c3aed', titleColor:'#fff', edgeLabelBackground:'#000' },
+      flowchart:{ useMaxWidth:false, htmlLabels:true, curve:'basis' },
+    });
+
+    const languages = [...new Set(Object.values(NODES).map(node => node.lang))];
+    let highlighter = null;
+    try { highlighter = await createHighlighter({ themes:['vitesse-dark'], langs:languages }); }
+    catch (error) { console.warn('Shiki unavailable; using plain code.', error); }
+    const HIGHLIGHTED = {};
+    for (const [id, node] of Object.entries(NODES)) {
+      if (!highlighter) break;
+      try { HIGHLIGHTED[id] = highlighter.codeToHtml(node.code, { lang:node.lang, theme:'vitesse-dark' }); }
+      catch (error) { console.warn(`Highlight failed for ${id}`, error); }
+    }
+
+    function usePanZoom() {
+      const viewportRef = useRef(null), canvasRef = useRef(null), zoomRef = useRef(null);
+      const state = useRef({ zoom:1, panX:0, panY:0 });
+      const drag = useRef({ active:false, x:0, y:0, id:null });
+      const apply = useCallback(() => {
+        const { zoom, panX, panY } = state.current;
+        if (canvasRef.current) canvasRef.current.style.transform = `translate(${panX}px, ${panY}px) scale(${zoom})`;
+        if (zoomRef.current) zoomRef.current.textContent = `${Math.round(zoom * 100)}%`;
+      }, []);
+      const fit = useCallback(() => {
+        const viewport = viewportRef.current, svg = canvasRef.current?.querySelector('svg');
+        if (!viewport || !svg) return;
+        const current = state.current;
+        const width = svg.getBoundingClientRect().width / current.zoom;
+        const height = svg.getBoundingClientRect().height / current.zoom;
+        const zoom = Math.max(.15, Math.min(1.7, Math.min((viewport.clientWidth - 100) / width, (viewport.clientHeight - 120) / height)));
+        current.zoom = zoom;
+        current.panX = (viewport.clientWidth - width * zoom) / 2;
+        current.panY = (viewport.clientHeight - height * zoom) / 2;
+        apply();
+      }, [apply]);
+      useEffect(() => {
+        const viewport = viewportRef.current;
+        if (!viewport) return;
+        const wheel = event => {
+          event.preventDefault();
+          const rect = viewport.getBoundingClientRect(), current = state.current;
+          const x = event.clientX - rect.left, y = event.clientY - rect.top;
+          const next = Math.min(4, Math.max(.15, current.zoom * (event.deltaY < 0 ? 1.12 : 1 / 1.12)));
+          const scale = next / current.zoom;
+          current.panX = x - scale * (x - current.panX);
+          current.panY = y - scale * (y - current.panY);
+          current.zoom = next;
+          apply();
+        };
+        const down = event => {
+          if (event.target.closest?.('.node, button')) return;
+          drag.current = { active:true, x:event.clientX, y:event.clientY, id:event.pointerId };
+          viewport.classList.add('dragging');
+          viewport.setPointerCapture?.(event.pointerId);
+        };
+        const move = event => {
+          if (!drag.current.active) return;
+          state.current.panX += event.clientX - drag.current.x;
+          state.current.panY += event.clientY - drag.current.y;
+          drag.current.x = event.clientX; drag.current.y = event.clientY; apply();
+        };
+        const up = () => { drag.current.active = false; viewport.classList.remove('dragging'); };
+        viewport.addEventListener('wheel', wheel, { passive:false });
+        viewport.addEventListener('pointerdown', down); viewport.addEventListener('pointermove', move);
+        viewport.addEventListener('pointerup', up); viewport.addEventListener('pointercancel', up);
+        window.addEventListener('resize', fit);
+        return () => { viewport.removeEventListener('wheel', wheel); viewport.removeEventListener('pointerdown', down); viewport.removeEventListener('pointermove', move); viewport.removeEventListener('pointerup', up); viewport.removeEventListener('pointercancel', up); window.removeEventListener('resize', fit); };
+      }, [apply, fit]);
+      const zoomIn = () => { state.current.zoom = Math.min(4, state.current.zoom * 1.25); apply(); };
+      const zoomOut = () => { state.current.zoom = Math.max(.15, state.current.zoom / 1.25); apply(); };
+      return { viewportRef, canvasRef, zoomRef, fit, zoomIn, zoomOut };
+    }
+
+    function MermaidDiagram({ onNodeClick, onReady, onError }) {
+      const ref = useRef(null);
+      useEffect(() => {
+        window.nodeClickHandler = onNodeClick;
+        mermaid.render('walkthrough-agent-runtime-diagram', DIAGRAM)
+          .then(({ svg, bindFunctions }) => {
+            if (!ref.current) return;
+            ref.current.innerHTML = svg;
+            bindFunctions?.(ref.current);
+            onReady();
+          })
+          .catch(onError);
+        return () => { delete window.nodeClickHandler; };
+      }, [onNodeClick, onReady, onError]);
+      return h('div', { ref, className:'mermaid-wrap', 'aria-label':'Coding Agent runtime flowchart' });
+    }
+
+    function DetailPanel({ nodeId, onClose }) {
+      const node = NODES[nodeId];
+      const closeRef = useRef(null);
+      useEffect(() => {
+        closeRef.current?.focus();
+        const key = event => { if (event.key === 'Escape') onClose(); };
+        document.addEventListener('keydown', key);
+        return () => document.removeEventListener('keydown', key);
+      }, [onClose]);
+      return h('aside', { className:'detail', role:'dialog', 'aria-modal':'false', 'aria-labelledby':'detail-title' },
+        h('button', { ref:closeRef, className:'detail-close', type:'button', onClick:onClose, 'aria-label':'关闭详情' }, '×'),
+        h('div', { className:'detail-scroll' },
+          h('div', { className:'detail-tag' }, node.type),
+          h('h2', { id:'detail-title' }, node.title),
+          h('p', null, node.description),
+          h('h3', null, 'Key code'),
+          HIGHLIGHTED[nodeId]
+            ? h('div', { dangerouslySetInnerHTML:{ __html:HIGHLIGHTED[nodeId] } })
+            : h('pre', null, h('code', null, node.code)),
+          h('h3', null, 'Files'),
+          h('div', { className:'files' }, ...node.files.map(file => h('code', { key:file }, file))),
+        ),
+      );
+    }
+
+    function App() {
+      const [activeId, setActiveId] = useState(null);
+      const [summaryCollapsed, setSummaryCollapsed] = useState(true);
+      const [error, setError] = useState(null);
+      const panZoom = usePanZoom();
+      const selectNode = useCallback(id => {
+        setActiveId(id);
+        document.querySelectorAll('.mermaid-wrap .node').forEach(node => { node.style.opacity = id ? '.38' : '1'; });
+        const selected = document.querySelector(`.mermaid-wrap .node[id*="${id}"]`);
+        if (selected) selected.style.opacity = '1';
+      }, []);
+      const close = useCallback(() => {
+        setActiveId(null);
+        document.querySelectorAll('.mermaid-wrap .node').forEach(node => { node.style.opacity = '1'; });
+      }, []);
+      const ready = useCallback(() => window.setTimeout(panZoom.fit, 80), [panZoom.fit]);
+      const fail = useCallback(reason => setError(reason instanceof Error ? reason.message : String(reason)), []);
+      return h(window.React.Fragment, null,
+        h('header', { className:'header' }, h('h1', null, 'Coding Agent 运行流程'), h('p', null, '从 Web 请求到工具循环、持久事件与独立验收 · 点击节点查看真实代码')),
+        h('div', { className:`summary ${summaryCollapsed ? 'compact' : 'expanded'}`, role:'button', tabIndex:0, onClick:() => setSummaryCollapsed(value => !value), onKeyDown:event => { if (event.key === 'Enter' || event.key === ' ') setSummaryCollapsed(value => !value); } },
+          summaryCollapsed ? 'ℹ︎ TL;DR' : h(window.React.Fragment, null, SUMMARY, h('small', null, '点击收起')),
+        ),
+        h('main', { ref:panZoom.viewportRef, className:'viewport' },
+          h('div', { ref:panZoom.canvasRef, className:'canvas' }, h(MermaidDiagram, { onNodeClick:selectNode, onReady:ready, onError:fail })),
+        ),
+        h('div', { className:'controls', 'aria-label':'图表缩放控件' },
+          h('button', { type:'button', onClick:panZoom.zoomOut, 'aria-label':'缩小' }, '−'),
+          h('output', { ref:panZoom.zoomRef }, '100%'),
+          h('button', { type:'button', onClick:panZoom.zoomIn, 'aria-label':'放大' }, '+'),
+          h('button', { type:'button', onClick:panZoom.fit, 'aria-label':'适应屏幕' }, '⌂'),
+        ),
+        h('div', { className:'legend', 'aria-label':'节点图例' }, ...LEGEND.map(([label, color]) => h('span', { key:label }, h('i', { style:{ background:color } }), label))),
+        h('div', { className:'hint' }, h('kbd', null, 'Scroll'), ' 缩放 · ', h('kbd', null, 'Drag'), ' 平移 · 点击节点'),
+        activeId && NODES[activeId] ? h(DetailPanel, { nodeId:activeId, onClose:close }) : null,
+        error ? h('div', { className:'error', role:'alert' }, `Mermaid 渲染失败：${error}`) : null,
+      );
+    }
+
+    window.ReactDOM.createRoot(document.getElementById('root')).render(h(App));
+  </script>
+</body>
+</html>

@@ -11,7 +11,7 @@ const menu = ref<HTMLDetailsElement | null>(null)
 
 const copy: Record<PermissionMode, { label: string; detail: string }> = {
   ask: { label: '严格确认', detail: '修改文件和执行命令前逐次询问' },
-  agent: { label: '风险确认', detail: '普通工作区操作自动执行，仅风险命令询问' },
+  agent: { label: '风险确认', detail: '常规工作区操作自动执行，删除文件与风险命令询问' },
   workspace_full: { label: '工作区自动执行', detail: '在当前工作区内自动执行允许的操作' },
 }
 

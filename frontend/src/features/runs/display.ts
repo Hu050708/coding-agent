@@ -36,8 +36,10 @@ const toolLabels: Record<string, string> = {
   list_files: '列出文件',
   read_file: '读取文件',
   search_text: '搜索代码',
+  make_directory: '创建目录',
   write_file: '写入文件',
   replace_text: '修改文件',
+  delete_file: '删除文件',
   run_command: '运行命令',
 }
 
@@ -150,7 +152,7 @@ export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
     }
     case 'approval.required':
       title = '等待你的确认'
-      detail = '命令不会在确认前执行'
+      detail = '待审批操作不会在确认前执行'
       tone = 'warning'
       stage = 'approval'
       break

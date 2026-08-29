@@ -12,6 +12,7 @@ describe('PermissionPicker', () => {
 
     expect(wrapper.text()).toContain('严格确认')
     expect(wrapper.text()).toContain('风险确认')
+    expect(wrapper.text()).toContain('删除文件与风险命令询问')
     expect(wrapper.text()).toContain('工作区自动执行')
 
     await wrapper.get('button.workspace_full').trigger('click')

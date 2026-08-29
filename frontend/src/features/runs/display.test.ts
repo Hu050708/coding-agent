@@ -38,6 +38,24 @@ describe('run event presentation', () => {
     expect(completed).toMatchObject({ detail: '创建 hello.py · 428 B', detailCode: true })
   })
 
+  it('labels directory creation and file deletion events', () => {
+    const directory = presentRunEvent({
+      seq: 4,
+      event: 'tool.started',
+      timestamp: '2026-08-27T10:00:00Z',
+      data: { tool_name: 'make_directory', target: 'src/main/java' },
+    })
+    const deletion = presentRunEvent({
+      seq: 5,
+      event: 'tool.completed',
+      timestamp: '2026-08-27T10:00:01Z',
+      data: { tool_name: 'delete_file', ok: true, result_summary: '删除 obsolete.txt · 12 B' },
+    })
+
+    expect(directory.title).toBe('创建目录 · make_directory')
+    expect(deletion.title).toBe('删除文件 · delete_file已返回')
+  })
+
   it('marks interrupted runs as recoverable warnings', () => {
     expect(
       presentRunEvent({

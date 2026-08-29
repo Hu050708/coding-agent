@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { presentRunEvent, presentRunOutcome } from './display'
+import type { RunEventEnvelope } from './types'
+import { latestChangeCheck, presentChangeCheck, presentRunEvent, presentRunOutcome } from './display'
 
 describe('run event presentation', () => {
   it('only renders bounded safe summaries', () => {
@@ -36,6 +37,58 @@ describe('run event presentation', () => {
 
     expect(started).toMatchObject({ detail: '命令：python hello.py', detailCode: true })
     expect(completed).toMatchObject({ detail: '创建 hello.py · 428 B', detailCode: true })
+  })
+
+  it('shows the latest modification check without changing the tool result summary', () => {
+    const events: RunEventEnvelope[] = [
+      {
+        seq: 1,
+        event: 'tool.completed' as const,
+        timestamp: '2026-08-27T10:00:00Z',
+        data: {
+          tool_name: 'write_file',
+          ok: true,
+          result_summary: '创建 hello.py · 428 B',
+          change_check: {
+            status: 'needs_check',
+            change_version: 1,
+            checked_version: null,
+            check_kind: null,
+            tool_sequence: null,
+            exit_code: null,
+          },
+        },
+      },
+      {
+        seq: 2,
+        event: 'tool.completed' as const,
+        timestamp: '2026-08-27T10:00:01Z',
+        data: {
+          tool_name: 'run_command',
+          ok: true,
+          result_summary: '命令成功结束 · exit 0',
+          change_check: {
+            status: 'passed',
+            change_version: 1,
+            checked_version: 1,
+            check_kind: 'test',
+            tool_sequence: 2,
+            exit_code: 0,
+          },
+        },
+      },
+    ]
+
+    const check = latestChangeCheck(events)
+    expect(check).toMatchObject({ status: 'passed', check_kind: 'test', tool_sequence: 2 })
+    expect(presentChangeCheck(check)).toEqual({
+      label: '当前修改已通过测试',
+      detail: '第 2 次工具调用，退出码 0',
+      tone: 'success',
+    })
+    expect(presentRunEvent(events[1]!).detail).toBe(
+      '命令成功结束 · exit 0；当前修改已通过测试',
+    )
   })
 
   it('labels directory creation and file deletion events', () => {

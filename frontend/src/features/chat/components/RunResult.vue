@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { RunSummary } from '../../runs/types'
+import type { ChangeCheckSummary, RunSummary } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
-import { presentRunOutcome } from '../../runs/display'
+import { presentChangeCheck, presentRunOutcome } from '../../runs/display'
 
-const props = defineProps<{ run: RunSummary }>()
+const props = defineProps<{ run: RunSummary; changeCheck?: ChangeCheckSummary | null }>()
 const outcome = computed(() => presentRunOutcome(props.run))
+const check = computed(() => presentChangeCheck(props.changeCheck ?? null))
 
 function formatCount(value: number | undefined): string {
   return new Intl.NumberFormat('zh-CN').format(value ?? 0)
@@ -31,6 +32,15 @@ function formatDuration(value: number | null | undefined): string {
     </div>
 
     <p class="outcome-description">{{ outcome.description }}</p>
+
+    <div class="change-check-card" :class="check.tone">
+      <span class="change-check-icon" aria-hidden="true"><AppIcon name="check" /></span>
+      <div>
+        <p>修改后检查</p>
+        <strong>{{ check.label }}</strong>
+        <small>{{ check.detail }}</small>
+      </div>
+    </div>
 
     <dl class="evidence-grid">
       <div>
@@ -163,6 +173,75 @@ h3 {
   color: var(--ink-soft);
   font-size: 11px;
   line-height: 1.55;
+}
+
+.change-check-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-subtle);
+}
+
+.change-check-card.success {
+  border-color: var(--success-border, #b9dec8);
+}
+
+.change-check-card.warning {
+  border-color: var(--warning-border);
+}
+
+.change-check-card.danger {
+  border-color: var(--danger-border);
+}
+
+.change-check-icon {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--ink-muted);
+  background: var(--surface);
+}
+
+.success .change-check-icon {
+  color: var(--success);
+}
+
+.warning .change-check-icon {
+  color: var(--warning);
+}
+
+.danger .change-check-icon {
+  color: var(--danger);
+}
+
+.change-check-card p,
+.change-check-card strong,
+.change-check-card small {
+  display: block;
+  margin: 0;
+}
+
+.change-check-card p {
+  color: var(--ink-muted);
+  font-size: 9px;
+}
+
+.change-check-card strong {
+  margin-top: 1px;
+  font-size: 11px;
+}
+
+.change-check-card small {
+  margin-top: 2px;
+  color: var(--ink-muted);
+  font-size: 9px;
 }
 
 .evidence-grid {

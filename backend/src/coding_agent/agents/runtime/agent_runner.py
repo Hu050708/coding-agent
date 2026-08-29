@@ -92,6 +92,8 @@ class RunOutcome:
     usage: dict[str, int]
     # 整次运行墙钟耗时，单位为秒。
     duration_seconds: float
+    # 本轮文件修改与最近一次检查的关系。
+    change_check: dict[str, Any] = field(default_factory=dict)
     # 工作区记忆加载结果摘要。
     memory: MemorySummary = field(
         default_factory=lambda: MemorySummary(status="unavailable")
@@ -356,6 +358,7 @@ def _safe_outcome(result: RunResult, *, memory: MemorySummary) -> RunOutcome:
         tool_calls=result.tool_calls,
         usage=result.usage.as_dict(),
         duration_seconds=result.duration_seconds,
+        change_check=result.change_check.as_dict(),
         memory=memory,
     )
 

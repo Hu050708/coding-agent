@@ -41,6 +41,34 @@ def test_trace_can_write_to_stream_without_file():
     assert "content" not in saved
 
 
+def test_trace_keeps_only_change_check_summary_fields():
+    stream = io.StringIO()
+    TraceWriter(stream=stream).emit(
+        "run_finished",
+        status="model_finished",
+        change_check={
+            "status": "passed",
+            "change_version": 2,
+            "checked_version": 2,
+            "check_kind": "test",
+            "tool_sequence": 7,
+            "exit_code": 0,
+            "content": "must not be recorded",
+        },
+    )
+
+    saved = json.loads(stream.getvalue())
+    assert saved["change_check"] == {
+        "status": "passed",
+        "change_version": 2,
+        "checked_version": 2,
+        "check_kind": "test",
+        "tool_sequence": 7,
+        "exit_code": 0,
+    }
+    assert "must not be recorded" not in stream.getvalue()
+
+
 def test_unknown_event_is_rejected():
     with pytest.raises(ValueError, match="unsupported"):
         TraceWriter().emit("debug", prompt="no")

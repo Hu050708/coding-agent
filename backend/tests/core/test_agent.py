@@ -401,11 +401,82 @@ def test_tool_completed_trace_uses_registry_command_metadata_shape():
             "ok": True,
             "error_code": None,
             "exit_code": 7,
-            "duration_ms": 0,
-            "truncated": True,
-        }
-    ]
+                "duration_ms": 0,
+                "truncated": True,
+                "change_check": {
+                    "status": "no_changes",
+                    "change_version": 0,
+                    "checked_version": None,
+                    "check_kind": None,
+                    "tool_sequence": None,
+                    "exit_code": None,
+                },
+            }
+        ]
     assert "sensitive output" not in repr(trace.events)
+
+
+def test_agent_records_change_check_without_changing_tool_history() -> None:
+    class ChangeRegistry(FakeRegistry):
+        schemas = [
+            {
+                "type": "function",
+                "function": {"name": name, "parameters": {"type": "object"}},
+            }
+            for name in ("write_file", "run_command")
+        ]
+
+        def execute(self, name, arguments, *, timeout_seconds=None):
+            self.calls.append((name, deepcopy(dict(arguments))))
+            if name == "write_file":
+                return '{"ok":true,"data":{"path":"hello.py"},"meta":{}}'
+            return '{"ok":true,"data":{"exit_code":0},"meta":{}}'
+
+    write = ModelCompletion(
+        finish_reason="tool_calls",
+        assistant=AssistantMessage(
+            tool_calls=(
+                ToolCall(
+                    id="write-1",
+                    name="write_file",
+                    arguments='{"path":"hello.py","content":"print(1)"}',
+                ),
+            )
+        ),
+    )
+    check = ModelCompletion(
+        finish_reason="tool_calls",
+        assistant=AssistantMessage(
+            tool_calls=(
+                ToolCall(
+                    id="check-1",
+                    name="run_command",
+                    arguments='{"argv":["python","-m","pytest"]}',
+                ),
+            )
+        ),
+    )
+    trace = RecordingTrace()
+
+    result = make_agent(
+        FakeAdapter(write, check, final_completion()),
+        ChangeRegistry(),
+        trace=trace,
+    ).run("create and test")
+
+    assert result.change_check.status == "passed"
+    assert result.change_check.change_version == 1
+    tool_messages = [item for item in result.messages if item["role"] == "tool"]
+    assert json.loads(tool_messages[0]["content"]) == {
+        "ok": True,
+        "data": {"path": "hello.py"},
+        "meta": {},
+    }
+    completed = [fields for event, fields in trace.events if event == "tool_completed"]
+    assert completed[0]["change_check"]["status"] == "needs_check"
+    assert completed[1]["change_check"]["status"] == "passed"
+    finished = [fields for event, fields in trace.events if event == "run_finished"]
+    assert finished[0]["change_check"] == result.change_check.as_dict()
 
 
 def test_unknown_model_tool_name_is_redacted_before_trace_emission():

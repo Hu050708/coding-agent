@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 
 import type { RunEventEnvelope, RunSummary } from '../../runs/types'
+import { latestChangeCheck } from '../../runs/display'
 import AppIcon from '../../../shared/components/AppIcon.vue'
 import RunResult from './RunResult.vue'
 import RunTimeline from './RunTimeline.vue'
@@ -18,6 +19,7 @@ defineEmits<{ close: []; stop: [] }>()
 const terminalStatuses = new Set(['completed', 'failed', 'cancelled', 'budget_exhausted', 'interrupted'])
 const active = computed(() => props.run !== null && !terminalStatuses.has(props.run.status))
 const terminal = computed(() => props.run !== null && terminalStatuses.has(props.run.status))
+const changeCheck = computed(() => latestChangeCheck(props.events))
 
 const statusCopy: Record<string, { label: string; detail: string }> = {
   starting: { label: '正在启动', detail: '等待本机执行器接管任务' },
@@ -78,7 +80,7 @@ const streamCopy = computed(() => {
         </section>
 
         <RunTimeline :events="events" :status="run.status" />
-        <RunResult v-if="terminal" :run="run" />
+        <RunResult v-if="terminal" :run="run" :change-check="changeCheck" />
       </template>
 
       <div v-else class="inspector-empty">

@@ -52,6 +52,14 @@ class ImmediateRunner:
                 "prompt_cache_miss_tokens": 8,
             },
             duration_seconds=0.01,
+            change_check={
+                "status": "passed",
+                "change_version": 1,
+                "checked_version": 1,
+                "check_kind": "test",
+                "tool_sequence": 1,
+                "exit_code": 0,
+            },
             memory=MemorySummary(status="loaded" if spec.memory_snapshot else "empty"),
         )
 
@@ -232,6 +240,8 @@ def test_health_workspace_conversation_run_messages_and_sse(tmp_path):
         assert "event: run.accepted" in stream.text
         assert "event: tool.completed" in stream.text
         assert "event: run.finished" in stream.text
+        assert '"change_check"' in stream.text
+        assert '"status":"passed"' in stream.text
         assert "finish the task" not in stream.text
 
 

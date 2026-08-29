@@ -117,3 +117,31 @@ def test_tool_events_keep_only_bounded_display_summaries() -> None:
         "ok": True,
         "result_summary": "创建 hello.py · 428 B",
     }
+
+
+def test_change_check_survives_safe_event_storage_without_extra_fields() -> None:
+    result = sanitize_run_event(
+        "run.finished",
+        {
+            "run_id": "run",
+            "status": "completed",
+            "change_check": {
+                "status": "passed",
+                "change_version": 2,
+                "checked_version": 2,
+                "check_kind": "test",
+                "tool_sequence": 8,
+                "exit_code": 0,
+                "raw_output": "secret",
+            },
+        },
+    )
+
+    assert result["change_check"] == {
+        "status": "passed",
+        "change_version": 2,
+        "checked_version": 2,
+        "check_kind": "test",
+        "tool_sequence": 8,
+        "exit_code": 0,
+    }

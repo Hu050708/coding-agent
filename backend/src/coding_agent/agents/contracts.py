@@ -166,6 +166,30 @@ class TokenUsage:
 
 
 @dataclass(frozen=True, slots=True)
+class ChangeCheckSummary:
+    """文件修改与最近一次检查之间的关系。"""
+
+    status: str = "no_changes"
+    change_version: int = 0
+    checked_version: int | None = None
+    check_kind: str | None = None
+    tool_sequence: int | None = None
+    exit_code: int | None = None
+
+    def as_dict(self) -> dict[str, str | int | None]:
+        """:return: 可安全写入事件和评测结果的普通字典。"""
+
+        return {
+            "status": self.status,
+            "change_version": self.change_version,
+            "checked_version": self.checked_version,
+            "check_kind": self.check_kind,
+            "tool_sequence": self.tool_sequence,
+            "exit_code": self.exit_code,
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class ModelCompletion:
     """把一次大模型 API 调用的完整返回结果，整理成项目内部统一的数据结构。"""
 
@@ -280,6 +304,8 @@ class RunResult:
     duration_seconds: float
     # 外部验收状态；核心循环默认无法自行确认，值为 unknown。
     verified: str = "unknown"
+    # 本轮文件修改是否被后续检查覆盖。
+    change_check: ChangeCheckSummary = field(default_factory=ChangeCheckSummary)
 
 
 __all__ = [
@@ -287,6 +313,7 @@ __all__ = [
     "AdapterRequestError",
     "AgentStatus",
     "AssistantMessage",
+    "ChangeCheckSummary",
     "CompletionAdapter",
     "ModelCompletion",
     "RunResult",

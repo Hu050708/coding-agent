@@ -1,4 +1,4 @@
-import type { RunEventEnvelope, RunStatus, RunSummary } from './types'
+import type { ChangeCheckSummary, RunEventEnvelope, RunStatus, RunSummary } from './types'
 
 export type ActivityTone = 'neutral' | 'active' | 'success' | 'warning' | 'danger'
 export type ActivityStage = 'control' | 'decision' | 'execution' | 'feedback' | 'approval'
@@ -22,6 +22,12 @@ export interface RunOutcomePresentation {
   description: string
   reasonLabel: string
   tone: Exclude<ActivityTone, 'active'>
+}
+
+export interface ChangeCheckPresentation {
+  label: string
+  detail: string
+  tone: 'neutral' | 'success' | 'warning' | 'danger'
 }
 
 const stageLabels: Record<ActivityStage, string> = {
@@ -78,6 +84,62 @@ function toolName(value: unknown): string {
 function reasonLabel(reason: string | null | undefined): string {
   if (!reason) return '未提供终止原因'
   return reasonLabels[reason] ?? reason.replaceAll('_', ' ')
+}
+
+function readChangeCheck(value: unknown): ChangeCheckSummary | null {
+  if (!value || typeof value !== 'object') return null
+  const item = value as Record<string, unknown>
+  const status = item.status
+  if (!['no_changes', 'needs_check', 'passed', 'failed', 'outdated'].includes(String(status))) {
+    return null
+  }
+  return {
+    status: status as ChangeCheckSummary['status'],
+    change_version: number(item.change_version) ?? 0,
+    checked_version: number(item.checked_version),
+    check_kind: ['test', 'compile', 'run'].includes(String(item.check_kind))
+      ? item.check_kind as ChangeCheckSummary['check_kind']
+      : null,
+    tool_sequence: number(item.tool_sequence),
+    exit_code: number(item.exit_code),
+  }
+}
+
+export function latestChangeCheck(events: RunEventEnvelope[]): ChangeCheckSummary | null {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const event = events[index]
+    if (!event) continue
+    const result = readChangeCheck(event.data.change_check)
+    if (result) return result
+  }
+  return null
+}
+
+export function presentChangeCheck(value: ChangeCheckSummary | null): ChangeCheckPresentation {
+  if (!value) {
+    return { label: '尚无检查记录', detail: '等待修改或检查工具返回结果', tone: 'neutral' }
+  }
+  const detail = value.tool_sequence === null
+    ? `记录到 ${value.change_version} 次修改`
+    : `第 ${value.tool_sequence} 次工具调用，退出码 ${value.exit_code ?? '—'}`
+  if (value.status === 'passed') {
+    const label = value.check_kind === 'test'
+      ? '当前修改已通过测试'
+      : value.check_kind === 'compile'
+        ? '当前修改已通过编译检查'
+        : '修改后程序运行成功'
+    return { label, detail, tone: 'success' }
+  }
+  if (value.status === 'failed') {
+    return { label: '当前检查未通过', detail, tone: 'danger' }
+  }
+  if (value.status === 'outdated') {
+    return { label: '之前的检查已过期', detail: `检查后又发生修改，当前共 ${value.change_version} 次修改`, tone: 'warning' }
+  }
+  if (value.status === 'needs_check') {
+    return { label: '修改后尚未检查', detail: `当前共 ${value.change_version} 次修改`, tone: 'warning' }
+  }
+  return { label: '本轮未修改文件', detail, tone: 'neutral' }
 }
 
 export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
@@ -138,11 +200,16 @@ export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
       title = `${toolName(data.tool_name)}${ok ? '已返回' : '失败'}`
       const repeated = data.progress_warning === true
       const resultSummary = text(data.result_summary)
-      detail = repeated
+      const check = readChangeCheck(data.change_check)
+      const checkLabel = check && ['make_directory', 'write_file', 'replace_text', 'delete_file', 'run_command'].includes(String(data.tool_name))
+        ? presentChangeCheck(check).label
+        : null
+      const baseDetail = repeated
         ? '检测到完全重复的工具结果，已提示模型调整策略'
         : ok
           ? resultSummary ?? '结果已作为事实反馈给模型'
           : text(data.error_code) ?? '工具返回失败结果，模型可据此调整策略'
+      detail = checkLabel && !repeated ? `${baseDetail}；${checkLabel}` : baseDetail
       detailCode = ok && resultSummary !== null && !repeated
       const duration = number(data.duration_ms)
       meta = duration === null ? null : `${Math.max(0, Math.round(duration))} ms`

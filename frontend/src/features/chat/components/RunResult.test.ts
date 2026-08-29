@@ -39,4 +39,25 @@ describe('RunResult', () => {
     expect(wrapper.text()).toContain('总耗时2.5 s')
     expect(wrapper.text()).not.toContain('验证成功')
   })
+
+  it('shows modification checks separately from independent verification', () => {
+    const wrapper = mount(RunResult, {
+      props: {
+        run: completedRun(),
+        changeCheck: {
+          status: 'passed',
+          change_version: 2,
+          checked_version: 2,
+          check_kind: 'test',
+          tool_sequence: 6,
+          exit_code: 0,
+        },
+      },
+    })
+
+    expect(wrapper.text()).toContain('修改后检查')
+    expect(wrapper.text()).toContain('当前修改已通过测试')
+    expect(wrapper.text()).toContain('第 6 次工具调用，退出码 0')
+    expect(wrapper.text()).toContain('独立验收尚未执行')
+  })
 })

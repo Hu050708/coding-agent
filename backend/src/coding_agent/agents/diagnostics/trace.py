@@ -39,15 +39,36 @@ EVENT_FIELDS: dict[str, frozenset[str]] = {
             "repeat_count",
             "progress_warning",
             "result_summary",
+            "change_check",
         }
     ),
     "run_finished": frozenset(
-        {"run_id", "status", "reason", "verified", "model_calls", "tool_calls", "usage", "duration_ms"}
+        {
+            "run_id",
+            "status",
+            "reason",
+            "verified",
+            "model_calls",
+            "tool_calls",
+            "usage",
+            "duration_ms",
+            "change_check",
+        }
     ),
 }
 
 _USAGE_FIELDS = frozenset(
     {"prompt_tokens", "completion_tokens", "total_tokens", "prompt_cache_hit_tokens", "prompt_cache_miss_tokens"}
+)
+_CHANGE_CHECK_FIELDS = frozenset(
+    {
+        "status",
+        "change_version",
+        "checked_version",
+        "check_kind",
+        "tool_sequence",
+        "exit_code",
+    }
 )
 _SENSITIVE_NAME = re.compile(
     r"(?:api.?key|authorization|reasoning|prompt|content|stdout|stderr|secret|token_value)",
@@ -147,6 +168,13 @@ def _safe_value(key: str, value: Any) -> Any:
 
     if key == "usage":
         return _safe_usage(value)
+    if key == "change_check" and isinstance(value, Mapping):
+        return {
+            field: item
+            for field in _CHANGE_CHECK_FIELDS
+            if (item := value.get(field)) is None
+            or isinstance(item, (str, int))
+        }
     if value is None or isinstance(value, (str, int, float, bool)):
         return value
     return str(value)

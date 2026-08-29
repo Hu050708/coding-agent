@@ -17,6 +17,17 @@ export interface UsageSummary {
   total_tokens: number
 }
 
+export type ChangeCheckStatus = 'no_changes' | 'needs_check' | 'passed' | 'failed' | 'outdated'
+
+export interface ChangeCheckSummary {
+  status: ChangeCheckStatus
+  change_version: number
+  checked_version: number | null
+  check_kind: 'test' | 'compile' | 'run' | null
+  tool_sequence: number | null
+  exit_code: number | null
+}
+
 export interface ApprovalRequest {
   id: string
   run_id: string

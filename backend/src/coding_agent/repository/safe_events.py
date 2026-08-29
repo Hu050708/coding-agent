@@ -76,7 +76,17 @@ _NESTED_KEYS: dict[str, dict[str, frozenset[str]]] = {
                 "prompt_cache_hit_tokens",
                 "prompt_cache_miss_tokens",
             }
-        )
+        ),
+        "change_check": frozenset(
+            {
+                "status",
+                "change_version",
+                "checked_version",
+                "check_kind",
+                "tool_sequence",
+                "exit_code",
+            }
+        ),
     },
     "model.completed": {
         "usage": frozenset(
@@ -93,6 +103,18 @@ _NESTED_KEYS: dict[str, dict[str, frozenset[str]]] = {
     "approval.required": {
         "approval": frozenset(
             {"approval_id", "reason", "created_at", "expires_at"}
+        )
+    },
+    "tool.completed": {
+        "change_check": frozenset(
+            {
+                "status",
+                "change_version",
+                "checked_version",
+                "check_kind",
+                "tool_sequence",
+                "exit_code",
+            }
         )
     },
 }

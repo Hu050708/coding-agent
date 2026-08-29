@@ -218,6 +218,8 @@ class RunSession:
     usage: dict[str, int] = field(default_factory=_empty_usage)
     # 运行墙钟耗时，单位为秒。
     duration_seconds: float | None = None
+    # 本轮文件修改与最近一次检查的关系。
+    change_check: dict[str, Any] = field(default_factory=dict)
     # 工作区记忆加载状态摘要。
     memory: MemorySummary = field(default_factory=lambda: MemorySummary(status="pending"))
     # 当前正在等待的审批；没有审批时为空。
@@ -252,6 +254,7 @@ class RunSession:
                 "tool_calls": self.tool_calls,
                 "usage": dict(self.usage),
                 "duration_seconds": self.duration_seconds,
+                "change_check": dict(self.change_check),
                 "memory": self.memory.as_dict(),
                 "pending_approval": (
                     self.pending_approval.as_dict() if self.pending_approval is not None else None
@@ -386,6 +389,7 @@ class RunSession:
             self.tool_calls = outcome.tool_calls
             self.usage = dict(outcome.usage)
             self.duration_seconds = outcome.duration_seconds
+            self.change_check = dict(outcome.change_check)
             if self.memory.status != "disabled":
                 self.memory = outcome.memory
             self.pending_approval = None
@@ -923,6 +927,7 @@ class RunManager:
                 "tool_calls": summary["tool_calls"],
                 "usage": summary["usage"],
                 "duration_seconds": summary["duration_seconds"],
+                "change_check": summary["change_check"],
             },
         )
         session.mark_final_event_published()

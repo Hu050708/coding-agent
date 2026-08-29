@@ -26,6 +26,7 @@ from coding_agent.agents.contracts import (
     TraceEmitter,
 )
 from coding_agent.agents.context import AgentContext
+from coding_agent.agents.change_check import ChangeCheck
 from coding_agent.agents.diagnostics.trace import summarize_argv, summarize_target
 from coding_agent.agents.progress import RepeatedToolExchangeDetector
 from coding_agent.agents.tool_protocol import (
@@ -240,6 +241,7 @@ class Agent:
             warning_threshold=self.config.repeat_warning_threshold,
             max_fingerprints=self.config.max_repeat_fingerprints,
         )
+        change_check = ChangeCheck()
 
         self._emit(
             "run_started",
@@ -266,6 +268,7 @@ class Agent:
 
             # 第一步：计算非负耗时，并发送供 UI 和持久化层消费的统一终态事件。
             duration = max(0.0, self._clock() - started_at)
+            check_summary = change_check.summary()
             self._emit(
                 "run_finished",
                 run_id=run_id,
@@ -276,6 +279,7 @@ class Agent:
                 tool_calls=tool_calls,
                 usage=usage.as_dict(),
                 duration_ms=round(duration * 1000),
+                change_check=check_summary.as_dict(),
             )
             # 第二步：复制完整消息历史，防止返回后的内部列表变化污染运行结果。
             return RunResult(
@@ -288,6 +292,7 @@ class Agent:
                 tool_calls=tool_calls,
                 usage=usage,
                 duration_seconds=duration,
+                change_check=check_summary,
             )
 
         # 第三步：每轮模型调用前先检查取消、墙钟时间、调用次数和令牌预算。
@@ -569,6 +574,13 @@ class Agent:
                     {"role": "tool", "tool_call_id": call.id, "content": result}
                 )
                 ok, error_code, exit_code, truncated = _tool_result_metadata(result)
+                change_check.observe(
+                    tool_name=trace_tool_name,
+                    arguments=parsed_arguments,
+                    ok=ok,
+                    exit_code=exit_code,
+                    sequence=sequence,
+                )
                 duration_ms = round(max(0.0, self._clock() - tool_started) * 1000)
                 completed_fields: dict[str, Any] = {
                     "run_id": run_id,
@@ -579,6 +591,7 @@ class Agent:
                     "exit_code": exit_code,
                     "duration_ms": duration_ms,
                     "truncated": truncated,
+                    "change_check": change_check.summary().as_dict(),
                 }
                 if repeat_count > 1:
                     completed_fields["repeat_count"] = repeat_count

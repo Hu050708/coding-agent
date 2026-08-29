@@ -22,6 +22,7 @@ verifier 和参考修复覆盖层。自动化测试会证明原始模板无法�
 
 ```powershell
 conda activate coding-agent
+$env:DEEPSEEK_API_KEY="你的实际密钥"
 python -m evaluation.run_benchmark --model deepseek-v4-flash --repeats 3
 ```
 

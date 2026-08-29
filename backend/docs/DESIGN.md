@@ -111,33 +111,34 @@ Vue -> FastAPI -> 应用服务 -> 运行管理器 -> Agent 控制器
 ```text
 backend/src/coding_agent/
   cli.py                    # 薄组合根：参数、配置、确认、退出码
-  main.py / web.py          # FastAPI 组合根和 loopback Web 入口
+  web.py                    # loopback Web 命令入口
+  main.py                   # FastAPI 应用入口
   settings/settings.py      # 环境变量、.env 和运行参数
-  router/                   # FastAPI 路由和 HTTP 错误映射
-  schemas/                  # HTTP 请求与响应模型
-  dependencies/             # FastAPI 依赖函数
-  services/                 # 工作区、会话、运行和记忆用例
-  models/                   # SQLAlchemy 模型与持久化枚举
-  repository/               # 仓储、DTO、事务门面和安全事件
-  database/                 # 连接、迁移和启动恢复
+  dependencies/             # FastAPI 依赖获取函数
+  router/                   # FastAPI 接口路由
+  schemas/                  # 接口请求和响应格式
+  models/                   # SQLAlchemy 数据库表
+  database/                 # 数据库连接、迁移和启动恢复
+  repository/               # 数据库查询和事务
+  services/                 # 工作区、会话、运行、记忆和评测逻辑
   agents/
     config.py               # 单次 Agent 运行的预算、上下文容量和重试配置
-    contracts.py            # 值对象和依赖端口
+    contracts.py            # Agent 使用的数据类型和简单接口
     context.py              # 有界可见历史与不可变记忆上下文
     progress.py             # 完全重复工具交换的有界哈希检测
-    tool_protocol.py        # 严格 JSON 与工具结果协议
+    tool_protocol.py        # 严格 JSON 参数和工具结果处理
     agent.py                # 状态机、消息历史和终止循环
-    providers/deepseek.py   # API 请求、响应规范化、错误分类
+    providers/deepseek.py   # API 请求、响应整理、错误分类
+    diagnostics/trace.py    # 简单的脱敏 JSONL 运行记录
     tools/                  # 六个工具的 schema、分发与实现
     security/               # 工作区、命令分级和三档权限
     runtime/                # 运行生命周期、审批、取消和实时事件
-    memory/                 # Agent 记忆值、提示合同和 CLI 记忆服务
-    diagnostics/trace.py    # 简单的脱敏 JSONL emit()
+    memory/                 # Agent 记忆数据、提示和 CLI 记忆服务
 ```
 
-`agents/` 根部的循环只依赖 adapter/registry Protocol，不导入 OpenAI SDK、Web 或工具具体实现；
-`agents/providers` 和 `agents/tools` 分别实现这些端口，CLI/FastAPI 负责装配。测试目录镜像源码职责边界，
-并另设 live integration 和端到端测试；不为每个概念建立额外生产模块。
+`agents/agent.py` 只依赖模型客户端和工具执行接口，不导入 OpenAI SDK、Web 或工具具体实现；
+`agents/providers/deepseek.py` 和 `agents/tools` 提供具体实现，CLI/FastAPI 负责创建它们。测试目录按源码功能组织，
+并另设 live integration 和端到端测试；不为每个概念建立额外目录。
 
 ### 4.1 Web 运行边界
 

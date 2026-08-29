@@ -12,7 +12,7 @@
 
 2. **12–30 秒：架构**
    - 显示 `src/coding_agent` 目录和 README 架构图。
-   - 讲：`agents/` 根部维护历史、预算和终止；`agents/providers` 只适配 DeepSeek；`agents/tools` 和 `agents/security` 执行本地能力与权限；`agents/diagnostics` 只写脱敏元数据。
+   - 讲：`agents/` 维护历史、预算和终止；`agents/providers/deepseek.py` 调用模型；`agents/tools` 和 `agents/security` 执行本地能力与权限；`agents/diagnostics/trace.py` 只写脱敏运行信息。
 
 3. **30–78 秒：真实任务闭环（可加速）**
    - 从全新 `examples/date_boundary_bug` 基线运行 `scripts/run_demo_trial.py`。

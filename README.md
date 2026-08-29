@@ -24,10 +24,10 @@ coding-agent/
 ```text
 CLI ────────────────────────────────┐
                                     v
-FastAPI -> application -> runs -> Agent core -> DeepSeek adapter
+FastAPI -> services -> runs -> Agent core -> DeepSeek client
               |             |          |
               v             v          `-> local tools + security policy
-        persistence     safe SSE
+          data          safe SSE
               |
               `-> PostgreSQL: workspace / conversation / run / message /
                               event / approval / memory

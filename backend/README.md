@@ -1,7 +1,7 @@
 # Coding Agent 后端
 
-后端包含自主实现的编程智能体循环、DeepSeek 适配器、本地工具和策略、FastAPI
-传输层、应用服务、PostgreSQL 持久化、运行编排、测试、评测夹具及提交文档。
+后端包含自主实现的编程智能体循环、DeepSeek 客户端、本地工具和权限、FastAPI
+接口、业务服务、PostgreSQL 数据读写、运行管理、测试、评测任务及提交文档。
 项目统一使用 `coding_agent` 导入命名空间。
 
 CLI 和 Web 服务共享同一核心，但外层依赖不同。CLI 不需要 FastAPI、Docker 或
@@ -46,7 +46,8 @@ CLI / Web 请求
 7. **理解上下文和记忆**：阅读 `agents/context.py` 与 `agents/memory/`。这里负责把会话历史、
    当前任务和经用户确认的记忆整理成提供给模型的上下文。
 8. **最后看两个入口**：CLI 路线从 `cli.py` 的 `run_cli()` 开始；Web 路线从 `main.py` 的
-   `create_app()` 开始，再沿 `router/` → `services/` → `repository/` → `models/` 阅读。
+   `create_app()` 开始，再沿 `router/` → `services/` → `repository/` 阅读。接口数据格式在
+   `schemas/`，数据库表在 `models/`，连接和迁移在 `database/`。
    前四步掌握之前，可以暂时跳过 Web、数据库迁移和 SSE 事件重放细节。
 
 每读完一层，建议马上查看同名测试目录。例如读完 `agents/tools/` 后查看 `tests/tools/`，

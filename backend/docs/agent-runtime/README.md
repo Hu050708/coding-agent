@@ -54,16 +54,15 @@
 |---|---|
 | `agents/agent.py` | Agent 主循环、预算、工具回填和终止 |
 | `agents/context.py` | 历史与记忆的有界上下文 |
-| `agents/contracts.py` | 模型、工具和运行结果之间的数据合同 |
-| `agents/providers/deepseek.py` | DeepSeek 请求与响应规范化 |
+| `agents/contracts.py` | 模型、工具和运行结果使用的数据 |
+| `agents/providers/deepseek.py` | DeepSeek 请求与响应整理 |
 | `agents/tools/` | 六个本地工具及统一工具协议 |
 | `agents/security/` | 工作区边界、命令分类和三档权限 |
 | `agents/progress.py` | 完全重复工具交换检测 |
-| `agents/runtime/agent_runner.py` | 为一次运行装配上述对象 |
+| `agents/runtime/agent_runner.py` | 为一次运行创建上述对象 |
 
 ## 阅读时避免三个误区
 
 - 不要把“模型”叫作整个 Agent。模型只是决策组件，循环和执行器同样属于 Agent。
 - 不要把“模型 final”叫作“任务验证成功”。它只说明模型选择停止调用工具。
 - 不要把“权限策略”叫作“安全沙箱”。它能限制项目自己的工具，但不能取代容器、虚拟机或受限系统账户。
-

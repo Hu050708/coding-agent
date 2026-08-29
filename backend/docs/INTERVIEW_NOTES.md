@@ -3,7 +3,7 @@
 ## 为什么这样分层
 
 - `core` 依赖 `CompletionAdapter`、`ToolExecutor`、`TraceEmitter` 三个端口，因此假模型可覆盖整个循环，OpenAI SDK 不能渗入状态机。
-- `providers` 只把 Chat Completions 对象规范化，不能执行工具或决定重试循环。
+- `deepseek.py` 只整理 Chat Completions 返回值，不能执行工具或决定重试循环。
 - `tools` 负责合同、schema、分发和实现；`security` 负责路径、原子 IO 与命令策略；CLI 只是组合根。
 
 ## 为什么不用 streaming / strict / 模型摘要

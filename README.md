@@ -35,34 +35,6 @@ FastAPI -> services -> runs -> Agent core -> DeepSeek client
                               event / approval / memory
 ```
 
-CLI 直接装配同一个 Agent core，不依赖 Web、Docker 或数据库。Web 是外层编排：工作区
-选择、会话和可见消息、运行状态、安全事件、审批与工作区记忆由 PostgreSQL 持久化；
-活动执行仍由本机 `RunManager` 驱动。数据库只保存可见 user/assistant 消息和白名单事件，
-不保存隐藏推理、原始提供方响应或完整工具输出。
-
-前端按 `app / features / shared` 分层，workspace、conversation、chat、run、permission、
-memory 各自维护 API、状态和组件，路由只使用数据库 ID，不在 URL 中暴露本机路径。
-
-## 安装
-
-要求 Python 3.11、Conda、Docker Desktop、Node.js 22 和 npm。在 PowerShell 中执行：
-
-```powershell
-Set-Location E:\code\coding-agent\backend
-conda env create -f environment.yml
-conda activate coding-agent
-python -m pip install -e ".[dev,web]"
-
-Set-Location E:\code\coding-agent\frontend
-npm ci
-```
-
-环境已经存在时，将 `conda env create` 换成：
-
-```powershell
-conda env update -n coding-agent -f environment.yml
-```
-
 ## Docker 三容器部署
 
 接收者只需安装 Docker Desktop 或 Docker Engine，不需要单独安装 Python、Conda、Node.js
@@ -94,46 +66,6 @@ CODING_AGENT_DATABASE_URL=postgresql+psycopg://coding_agent:replace-with-a-stron
 绝对目录；Web 的目录浏览器只能注册它下面的工作区。不要把真实密钥或密码写入仓库、
 终端录屏、截图、提交用 README 或视频。
 
-## 启动 WebUI
-
-按“PostgreSQL → 后端 → 前端”的顺序使用三个终端。
-
-终端 1，启动本项目独立数据库：
-
-```powershell
-Set-Location E:\code\coding-agent\backend
-docker compose --env-file .env -f deploy/compose.yml up -d
-```
-
-该 Compose 只创建 `coding-agent-postgres`，使用独立卷
-`coding_agent_postgres_data`，并将 PostgreSQL 绑定到 `127.0.0.1:5434`。它不会复用或
-修改本机其他项目的容器和数据卷。
-
-终端 2，启动后端：
-
-```powershell
-Set-Location E:\code\coding-agent\backend
-conda activate coding-agent
-coding-agent-web
-```
-
-后端启动时自动执行 Alembic 迁移。Web 强制使用 PostgreSQL；配置缺失、数据库不可达或
-迁移失败都会明确阻止启动，不会静默退回 SQLite 或内存存储。
-
-终端 3，启动前端：
-
-```powershell
-Set-Location E:\code\coding-agent\frontend
-npm run dev
-```
-
-浏览器打开 <http://127.0.0.1:5173/>；FastAPI 文档位于
-<http://127.0.0.1:8000/api/docs>。前后端和 PostgreSQL 都只绑定 loopback。
-
-进入页面后，先从受限目录浏览器选择工作区，再创建会话并发送任务。同一工作区同一时刻
-最多有一个活动运行；不同工作区可以并行。刷新或重连时，SSE 使用 PostgreSQL 中的安全
-事件和 `Last-Event-ID` 续播；服务重启不会恢复进程中的执行，而会把未完成运行标记为
-`interrupted` 并留下可重放事件。
 
 ## 三档运行权限
 

@@ -44,6 +44,11 @@ class ApprovalRepository:
     """管理工具审批的创建、锁定和一次性状态转换。"""
 
     def __init__(self, session: Session) -> None:
+        """绑定当前事务使用的 ORM 会话。
+
+        :param session: 由上层负责提交或回滚的 SQLAlchemy 会话。
+        """
+
         self.session = session
 
     def create(
@@ -56,7 +61,17 @@ class ApprovalRepository:
         reason: str,
         expires_at: datetime,
     ) -> Approval:
-        """创建一条等待用户处理的工具审批记录。"""
+        """创建一条等待用户处理的工具审批记录。
+
+        :param approval_id: 运行时预先生成的审批 ID。
+        :param run_id: 触发危险操作的运行 ID。
+        :param tool_name: 请求执行的工具名称。
+        :param action_summary: 面向用户的简短操作摘要。
+        :param reason: 安全策略要求审批的原因。
+        :param expires_at: 带时区的自动过期时间。
+        :return: 已清洗展示字段并 flush 的待审批实体。
+        :raises ValueError: 过期时间不含时区或展示字段不安全。
+        """
 
         # 第一步：规范化展示给用户的工具信息，避免运行时事件与数据库内容不一致。
         if not isinstance(expires_at, datetime) or expires_at.tzinfo is None:
@@ -80,6 +95,13 @@ class ApprovalRepository:
         return item
 
     def get(self, approval_id: UUIDLike, *, for_update: bool = False) -> Approval | None:
+        """按 ID 查询审批记录。
+
+        :param approval_id: 审批 ID。
+        :param for_update: 是否为状态修改获取行级写锁。
+        :return: 匹配实体；不存在时为 None。
+        """
+
         statement = select(Approval).where(
             Approval.id == as_uuid(approval_id, label="approval_id")
         )
@@ -88,6 +110,12 @@ class ApprovalRepository:
         return self.session.scalar(statement)
 
     def pending_for_run(self, run_id: UUIDLike) -> Approval | None:
+        """查询运行当前唯一的待处理审批。
+
+        :param run_id: 运行 ID。
+        :return: 待处理审批；没有时为 None。
+        """
+
         return self.session.scalar(
             select(Approval).where(
                 Approval.run_id == as_uuid(run_id, label="run_id"),
@@ -98,7 +126,15 @@ class ApprovalRepository:
     def resolve(
         self, approval_id: UUIDLike, *, status: ApprovalStatus | str
     ) -> Approval:
-        """以行锁把待审批记录一次性转换为最终状态。"""
+        """以行锁把待审批记录一次性转换为最终状态。
+
+        :param approval_id: 待处理审批 ID。
+        :param status: 同意、拒绝、过期或取消等终结状态。
+        :return: 更新后的审批实体。
+        :raises PersistenceNotFoundError: 审批不存在。
+        :raises PersistenceConflictError: 审批已被其他请求处理。
+        :raises ValueError: 目标状态仍为 pending。
+        """
 
         # 第一步：锁定记录，防止两个确认请求同时修改同一条审批。
         item = self.get(approval_id, for_update=True)
@@ -115,4 +151,3 @@ class ApprovalRepository:
         item.updated_at = item.resolved_at
         self.session.flush()
         return item
-

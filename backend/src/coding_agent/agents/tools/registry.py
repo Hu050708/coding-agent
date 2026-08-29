@@ -53,7 +53,20 @@ class ToolRegistry:
         max_write_chars: int = 500_000,
         max_command_output_bytes: int = 12_000,
     ) -> None:
-        """解析冻结权限，校验回调组合，并装配固定工具处理器。"""
+        """解析冻结权限，校验回调组合，并装配固定工具处理器。
+
+        :param workspace: 所有文件和命令工具必须遵守的工作区安全边界。
+        :param confirm_action: 文件修改和命令共用的审批回调。
+        :param confirm_command: 兼容旧调用方的审批回调别名，不能与前者同时提供。
+        :param cancel_check: 长时间命令执行期间查询用户取消状态的回调。
+        :param permission_mode: 本次运行冻结的权限模式；省略时由兼容选项推导。
+        :param auto_approve: 旧版自动审批开关，等价于 ``workspace_full`` 模式。
+        :param max_read_chars: 单次读取返回给模型的最大字符数。
+        :param max_file_bytes: 可读取或替换的单个文件最大字节数。
+        :param max_write_chars: 单次新建或替换内容允许包含的最大字符数。
+        :param max_command_output_bytes: 命令标准输出和错误输出各自的捕获上限。
+        :raises ValueError: 权限选项冲突或同时提供两个审批回调。
+        """
 
         # 第一步：将旧 auto_approve 选项映射为权威权限模式，并拒绝冲突配置。
         if permission_mode is None:
@@ -114,6 +127,8 @@ class ToolRegistry:
 
     @property
     def schemas(self) -> list[dict[str, Any]]:
+        """:return: 当前冻结权限模式允许暴露给模型的工具 Schema 副本。"""
+
         return schemas_for_permission(self.permission_policy)
 
     def execute(
@@ -123,7 +138,13 @@ class ToolRegistry:
         *,
         timeout_seconds: float | None = None,
     ) -> str:
-        """校验并执行一次工具调用，将所有结果收敛为统一 JSON 对象。"""
+        """校验并执行一次工具调用，将所有结果收敛为统一 JSON 对象。
+
+        :param name: 模型请求的工具名称。
+        :param arguments: 已解析但尚未完成工具级字段校验的参数映射。
+        :param timeout_seconds: 本次工具执行可占用的剩余墙钟秒数。
+        :return: 成功或失败均符合统一协议的紧凑 JSON 字符串。
+        """
 
         # 第一步：校验工具可见性、参数对象和运行剩余时限。
         if not isinstance(name, str) or name not in self._handlers:
@@ -174,7 +195,12 @@ class ToolRegistry:
             )
 
     def _confirm_tool_action(self, name: str, arguments: Mapping[str, Any]) -> None:
-        """按当前权限策略，为文件修改工具发起一次同步审批。"""
+        """按当前权限策略，为文件修改工具发起一次同步审批。
+
+        :param name: 即将执行的文件修改工具名称。
+        :param arguments: 用于生成安全操作摘要的工具参数。
+        :raises ToolError: 缺少审批通道、审批回调失败或用户拒绝操作。
+        """
 
         # 第一步：只有策略判定为 confirm 的工具才构造审批请求。
         if self.permission_policy.tool_decision(name) is not CommandDecision.CONFIRM:
@@ -201,6 +227,12 @@ class ToolRegistry:
 
 
 def _serialize_error(error: ToolError) -> str:
+    """把结构化工具错误序列化为统一失败响应。
+
+    :param error: 工具实现或安全边界抛出的领域错误。
+    :return: 包含 ``ok=false`` 及可选数据、元数据的紧凑 JSON。
+    """
+
     response: dict[str, Any] = {
         "ok": False,
         "error": {

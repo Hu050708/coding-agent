@@ -25,6 +25,13 @@ def list_conversations(
     workspace_id: UUID = Query(),
     service: CatalogService = Depends(get_catalog_service),
 ) -> dict[str, object]:
+    """列出指定工作区的会话。
+
+    :param workspace_id: 查询参数中的工作区 UUID。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 符合会话列表响应模型的字典。
+    """
+
     return {"items": service.list_conversations(str(workspace_id))}
 
 
@@ -33,6 +40,13 @@ def create_conversation(
     payload: ConversationCreateRequest,
     service: CatalogService = Depends(get_catalog_service),
 ) -> dict[str, object]:
+    """创建一个会话。
+
+    :param payload: 已校验的会话创建请求体。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 新会话公开视图。
+    """
+
     return service.create_conversation(
         workspace_id=str(payload.workspace_id),
         title=payload.title,
@@ -46,6 +60,13 @@ def get_conversation(
     conversation_id: UUID,
     service: CatalogService = Depends(get_catalog_service),
 ) -> dict[str, object]:
+    """读取一条会话。
+
+    :param conversation_id: URL 路径中的会话 UUID。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 会话公开视图。
+    """
+
     return service.get_conversation(str(conversation_id))
 
 
@@ -55,6 +76,14 @@ def update_conversation(
     payload: ConversationUpdateRequest,
     service: CatalogService = Depends(get_catalog_service),
 ) -> dict[str, object]:
+    """部分更新会话设置。
+
+    :param conversation_id: URL 路径中的会话 UUID。
+    :param payload: 已校验的部分更新请求体。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 更新后的会话公开视图。
+    """
+
     return service.update_conversation(
         str(conversation_id),
         title=payload.title,
@@ -68,6 +97,13 @@ def delete_conversation(
     conversation_id: UUID,
     service: CatalogService = Depends(get_catalog_service),
 ) -> Response:
+    """删除没有活动运行的会话。
+
+    :param conversation_id: URL 路径中的会话 UUID。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 无正文的 HTTP 204 响应。
+    """
+
     service.delete_conversation(str(conversation_id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -77,6 +113,13 @@ def list_messages(
     conversation_id: UUID,
     service: CatalogService = Depends(get_catalog_service),
 ) -> dict[str, object]:
+    """列出会话的可见消息历史。
+
+    :param conversation_id: URL 路径中的会话 UUID。
+    :param service: FastAPI 注入的目录业务服务。
+    :return: 符合消息列表响应模型的字典。
+    """
+
     return {"items": service.list_messages(str(conversation_id))}
 
 

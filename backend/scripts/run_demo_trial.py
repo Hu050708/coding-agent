@@ -23,11 +23,21 @@ EVALUATOR = PROJECT_ROOT / "evaluation" / "verify_date_boundary.py"
 
 
 def _default_output() -> Path:
+    """生成带 UTC 时间戳的默认试验输出目录。
+
+    :return: ``backend/tmp/demo-runs`` 下的新候选目录路径。
+    """
+
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return PROJECT_ROOT / "tmp" / "demo-runs" / f"trial-{stamp}"
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """构建真实 API 演示试验的命令行解析器。
+
+    :return: 支持输出目录、模型和墙钟上限的参数解析器。
+    """
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=None, help="新候选目录")
     parser.add_argument("--model", default="deepseek-v4-flash")
@@ -36,7 +46,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """复制基线、运行智能体、独立验收候选结果并写出试验摘要。"""
+    """复制基线、运行智能体、独立验收候选结果并写出试验摘要。
+
+    :param argv: 可选命令行参数；None 表示读取当前进程参数。
+    :return: 智能体和独立评测均成功时为 0，配置错误为 2，其余失败为 1。
+    """
 
     # 第一步：校验真实 API 凭据和全新输出路径，再复制只读基线作为候选目录。
     args = build_parser().parse_args(argv)

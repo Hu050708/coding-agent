@@ -9,7 +9,10 @@ from coding_agent.main import serve
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """构建刻意精简的服务端命令行接口。"""
+    """构建刻意精简的服务端命令行接口。
+
+    :return: 只接受标准帮助参数的命令行解析器。
+    """
 
     return argparse.ArgumentParser(
         prog="coding-agent-web",
@@ -21,7 +24,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> None:
-    """校验命令行参数后启动受支持的服务器。"""
+    """校验命令行参数后启动受支持的服务器。
+
+    :param argv: 可选参数序列；None 表示读取当前进程命令行。
+    """
 
     build_parser().parse_args(argv)
     serve()

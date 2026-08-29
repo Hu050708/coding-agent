@@ -24,7 +24,14 @@ _LIST_SCAN_LIMIT = 10_000
 
 
 def list_files(workspace: Workspace, arguments: Mapping[str, Any]) -> dict[str, Any]:
-    """按稳定顺序递归列出文件，同时限制返回量和实际扫描量。"""
+    """按稳定顺序递归列出文件，同时限制返回量和实际扫描量。
+
+    :param workspace: 提供路径解析、保护规则和链接检测的工作区对象。
+    :param arguments: 起始目录、可选 glob 和最大返回条目数。
+    :return: 包含文件条目、扫描统计和截断标志的工具数据。
+    :raises ToolError: 参数或 glob 不合法。
+    :raises WorkspaceError: 目标目录越界、受保护或不存在。
+    """
 
     # 第一步：校验目录、可选 glob 和返回数量上限。
     reject_unknown(arguments, {"path", "glob", "max_entries"})
@@ -124,7 +131,16 @@ def read_file(
     max_chars: int = 20_000,
     max_file_bytes: int = 2_000_000,
 ) -> dict[str, Any]:
-    """在字节和字符双重限制下读取 UTF-8 文本的指定行区间。"""
+    """在字节和字符双重限制下读取 UTF-8 文本的指定行区间。
+
+    :param workspace: 限制读取范围并保护敏感路径的工作区对象。
+    :param arguments: 文件路径及可选起止行号。
+    :param max_chars: 单次返回给模型的正文最大字符数。
+    :param max_file_bytes: 允许读取的完整文件最大字节数。
+    :return: 文件正文、路径以及哈希、编码、换行等快照元数据。
+    :raises ToolError: 参数、行范围、文件大小或文本编码不合法。
+    :raises WorkspaceError: 文件越界、受保护或不存在。
+    """
 
     # 第一步：解析目标路径和行范围，再通过 Workspace 锁定工作区内文件。
     reject_unknown(arguments, {"path", "start_line", "end_line"})
@@ -175,7 +191,15 @@ def write_file(
     *,
     max_chars: int = 500_000,
 ) -> dict[str, Any]:
-    """以仅创建模式原子写入 UTF-8 文件，禁止覆盖已有目标。"""
+    """以仅创建模式原子写入 UTF-8 文件，禁止覆盖已有目标。
+
+    :param workspace: 提供安全路径解析和原子创建能力的工作区对象。
+    :param arguments: 新文件的相对路径和完整文本内容。
+    :param max_chars: 新文件正文允许包含的最大字符数。
+    :return: 新文件路径及哈希、字节数、编码和换行元数据。
+    :raises ToolError: 参数过大或正文不能编码为 UTF-8。
+    :raises WorkspaceError: 路径越界、受保护或目标已存在。
+    """
 
     # 第一步：校验路径和正文，并在落盘前完成 UTF-8 编码。
     reject_unknown(arguments, {"path", "content"})
@@ -211,7 +235,16 @@ def replace_text(
     max_file_bytes: int = 2_000_000,
     max_new_chars: int = 500_000,
 ) -> dict[str, Any]:
-    """校验文件快照后执行唯一文本替换，并原子发布新内容。"""
+    """校验文件快照后执行唯一文本替换，并原子发布新内容。
+
+    :param workspace: 提供受限读取和原子替换能力的工作区对象。
+    :param arguments: 路径、旧文本、新文本、预期哈希和预期匹配次数。
+    :param max_file_bytes: 允许编辑的原文件最大字节数。
+    :param max_new_chars: 新文本参数和编辑后完整文件的字符上限。
+    :return: 替换数量及修改前后的哈希、大小和文本格式元数据。
+    :raises ToolError: 哈希过期、匹配数不唯一、文件过大或编码不合法。
+    :raises WorkspaceError: 文件越界、受保护或发布前发生并发修改。
+    """
 
     # 第一步：读取并校验原文件，保留换行风格和内容哈希作为并发修改依据。
     reject_unknown(
@@ -282,6 +315,14 @@ def replace_text(
 
 
 def _read_limited(path: Path, limit: int) -> bytes:
+    """读取不超过指定字节上限的完整文件。
+
+    :param path: 要读取的已解析文件路径。
+    :param limit: 允许读取的最大字节数。
+    :return: 完整文件字节。
+    :raises ToolError: 文件无法读取或大小超过限制。
+    """
+
     try:
         with path.open("rb") as stream:
             data = stream.read(limit + 1)
@@ -293,6 +334,13 @@ def _read_limited(path: Path, limit: int) -> bytes:
 
 
 def _decode_utf8_text(data: bytes) -> tuple[str, str, bool]:
+    """识别 UTF-8 BOM 并拒绝二进制或非 UTF-8 内容。
+
+    :param data: 完整文件字节。
+    :return: 解码文本、编码标签以及是否带 BOM。
+    :raises ToolError: 内容含空字节或不能按 UTF-8 解码。
+    """
+
     has_bom = data.startswith(codecs.BOM_UTF8)
     body = data[len(codecs.BOM_UTF8) :] if has_bom else data
     if b"\x00" in body:
@@ -305,6 +353,12 @@ def _decode_utf8_text(data: bytes) -> tuple[str, str, bool]:
 
 
 def _newline_style(text: str) -> str:
+    """识别文本使用的换行约定。
+
+    :param text: 已解码的完整文本。
+    :return: ``crlf``、``lf``、``cr``、``mixed`` 或 ``none``。
+    """
+
     crlf = text.count("\r\n")
     lf = text.count("\n") - crlf
     cr = text.count("\r") - crlf
@@ -324,6 +378,10 @@ def _normalize_replacement_newlines(text: str, source_style: str) -> str:
     """使替换文本匹配源文件的单一换行约定。
 
     混合换行或没有换行的源文件保持原样，因为这两种情况下都不存在明确约定。
+
+    :param text: 模型提供的替换文本。
+    :param source_style: ``_newline_style`` 返回的源文件换行标签。
+    :return: 换行符与源文件单一约定一致的新文本。
     """
 
     replacements = {"crlf": "\r\n", "lf": "\n", "cr": "\r"}
@@ -334,11 +392,24 @@ def _normalize_replacement_newlines(text: str, source_style: str) -> str:
 
 
 def _normalized_relative(workspace: Workspace, relative: str) -> str:
+    """将任意受支持相对路径规范化为 POSIX 展示形式。
+
+    :param workspace: 负责校验路径片段的工作区对象。
+    :param relative: 调用方提供的相对路径文本。
+    :return: 使用正斜杠的规范相对路径，根目录表示为 ``.``。
+    """
+
     parts = workspace.relative_parts(relative)
     return PurePosixPath(*parts).as_posix() if parts else "."
 
 
 def _validate_glob(pattern: str) -> None:
+    """确认 glob 不包含绝对路径、父目录或控制字符语法。
+
+    :param pattern: 模型提供的 glob 模式。
+    :raises ToolError: 模式可能逃逸工作区或包含不支持字符。
+    """
+
     if "\x00" in pattern or any(ord(character) < 32 for character in pattern):
         raise ToolError("invalid_glob", "The glob contains invalid characters.")
     windows = PureWindowsPath(pattern)
@@ -350,6 +421,12 @@ def _validate_glob(pattern: str) -> None:
 
 
 def _dir_entry_is_reparse(entry: os.DirEntry[str]) -> bool:
+    """保守判断目录项是否为符号链接或 Windows 重解析点。
+
+    :param entry: ``os.scandir`` 返回的目录项。
+    :return: 条目是链接、重解析点或无法安全读取元数据时为 ``True``。
+    """
+
     try:
         metadata = entry.stat(follow_symlinks=False)
     except OSError:

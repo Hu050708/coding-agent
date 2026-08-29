@@ -11,7 +11,11 @@ from coding_agent.repository.event_repo import RunEventRepository
 
 
 def interrupt_stale_runs(session_factory: sessionmaker[Session]) -> int:
-    """原子地将重启前的活动运行和审批标记为终态。"""
+    """原子地将重启前的活动运行和审批标记为终态。
+
+    :param session_factory: 用于开启恢复事务的 SQLAlchemy 会话工厂。
+    :return: 本次被标记为中断的遗留运行数量。
+    """
 
     # 第一步：锁定所有遗留活动运行，确保多实例恢复时只有一个事务负责对账。
     now = utc_now()

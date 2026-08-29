@@ -36,7 +36,17 @@ def search_text(
     max_file_bytes: int = _DEFAULT_MAX_FILE_BYTES,
     max_output_chars: int = _DEFAULT_MAX_OUTPUT_CHARS,
 ) -> dict[str, Any]:
-    """在工作区 UTF-8 文件中搜索单行字面文本。"""
+    """在工作区 UTF-8 文件中搜索单行字面文本。
+
+    :param workspace: 限制搜索根目录和受保护路径的工作区对象。
+    :param arguments: 查询文本、起始路径、glob、大小写及结果上限等模型参数。
+    :param max_files: 单次搜索最多考察的普通文件数量。
+    :param max_total_bytes: 所有实际读取文件的累计字节预算。
+    :param max_file_bytes: 允许读取的单个候选文件最大字节数。
+    :param max_output_chars: 返回给模型的匹配项累计字符上限。
+    :return: 包含匹配列表、扫描统计和截断标志的工具数据。
+    :raises ToolError: 查询参数、路径或 glob 不合法。
+    """
 
     # 第一步：解析搜索条件和返回预算，提前拒绝多行查询与无效 glob。
     reject_unknown(
@@ -172,7 +182,14 @@ def _candidate_files(
     pattern: str | None,
     max_files: int,
 ) -> tuple[list[tuple[Path, str, int]], bool, int]:
-    """遍历工作区目录，返回满足 glob 的稳定候选文件列表。"""
+    """遍历工作区目录，返回满足 glob 的稳定候选文件列表。
+
+    :param workspace: 提供路径标签、保护规则和重解析点检测的工作区对象。
+    :param start: 已解析且位于工作区内的搜索起始目录。
+    :param pattern: 可选的大小写不敏感 glob；为空表示接受所有普通文件。
+    :param max_files: 实际考察的普通文件数量上限。
+    :return: 候选文件三元组列表、是否触顶以及跳过的错误数量。
+    """
 
     # 第一步：使用显式栈遍历目录，限制实际访问的目录项和文件数量。
     candidates: list[tuple[Path, str, int]] = []
@@ -228,6 +245,15 @@ def _candidate_files(
 
 
 def _optional_boolean(arguments: Mapping[str, Any], name: str, *, default: bool) -> bool:
+    """读取一个可选布尔工具参数。
+
+    :param arguments: 工具参数映射。
+    :param name: 参数名称。
+    :param default: 参数缺失时使用的布尔值。
+    :return: 默认值或通过类型校验的布尔值。
+    :raises ToolError: 已提供的值不是布尔类型。
+    """
+
     if name not in arguments:
         return default
     value = arguments[name]
@@ -237,10 +263,22 @@ def _optional_boolean(arguments: Mapping[str, Any], name: str, *, default: bool)
 
 
 def _bounded_line(value: str) -> str:
+    """截取一行可返回给模型的有界预览。
+
+    :param value: 原始文本行。
+    :return: 最多包含 ``_MAX_PREVIEW_CHARS`` 个字符的前缀。
+    """
+
     return value[:_MAX_PREVIEW_CHARS]
 
 
 def _item_chars(item: Mapping[str, Any]) -> int:
+    """估算一条搜索结果实际占用的可见字符数。
+
+    :param item: 包含路径、预览及可选上下文行的匹配项。
+    :return: 所有字符串字段和上下文字符串的字符数之和。
+    """
+
     total = sum(len(value) for value in item.values() if isinstance(value, str))
     for name in ("before", "after"):
         values = item.get(name)

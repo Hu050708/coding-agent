@@ -1,8 +1,4 @@
-"""基于官方 OpenAI Python 客户端实现 DeepSeek Chat Completions 适配器。
-
-SDK 仅用于 HTTP 传输和响应数据对象。本模块不解析工具参数、不执行工具、不管理
-历史，也不运行智能体循环；这些职责仍属于 :mod:`coding_agent.agents.agent`。
-"""
+"""基于官方 OpenAI Python 客户端实现 DeepSeek Chat Completions 适配器。"""
 
 from __future__ import annotations
 
@@ -38,6 +34,12 @@ _NON_HISTORICAL_FINISH_REASONS = {
 
 
 def _is_finite_positive_number(value: Any) -> bool:
+    """判断输入是否为非布尔类型的有限正数。
+
+    :param value: 待校验的任意值。
+    :return: 输入为大于零的有限整数或浮点数时返回 ``True``。
+    """
+
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
     try:
@@ -47,6 +49,15 @@ def _is_finite_positive_number(value: Any) -> bool:
 
 
 def _field(value: Any, name: str, default: Any = _MISSING) -> Any:
+    """统一读取 SDK 对象属性或字典字段。
+
+    :param value: SDK 数据对象或字段映射。
+    :param name: 要读取的属性或键名称。
+    :param default: 字段缺失时返回的默认值；省略表示字段必须存在。
+    :return: 读取到的字段值或显式默认值。
+    :raises AdapterProtocolError: 必填字段不存在。
+    """
+
     if isinstance(value, Mapping):
         if name in value:
             return value[name]
@@ -61,6 +72,14 @@ def _field(value: Any, name: str, default: Any = _MISSING) -> Any:
 
 
 def _optional_text(value: Any, field_name: str) -> str | None:
+    """校验供应商可空文本字段。
+
+    :param value: 待校验的字段值。
+    :param field_name: 用于错误消息的协议字段名称。
+    :return: 原字符串或 ``None``。
+    :raises AdapterProtocolError: 非空值不是字符串。
+    """
+
     if value is None:
         return None
     if not isinstance(value, str):
@@ -69,6 +88,14 @@ def _optional_text(value: Any, field_name: str) -> str | None:
 
 
 def _optional_nonnegative_int(value: Any, field_name: str) -> int:
+    """校验可缺省的非负整数字段。
+
+    :param value: 待校验的用量字段，``None`` 按零处理。
+    :param field_name: 用于错误消息的用量字段名称。
+    :return: 合法非负整数。
+    :raises AdapterProtocolError: 值为布尔值、负数或非整数。
+    """
+
     if value is None:
         return 0
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
@@ -77,7 +104,12 @@ def _optional_nonnegative_int(value: Any, field_name: str) -> int:
 
 
 def _normalize_usage(raw_usage: Any) -> TokenUsage:
-    """把供应商用量字段转换为稳定的核心 TokenUsage。"""
+    """把供应商用量字段转换为稳定的核心 TokenUsage。
+
+    :param raw_usage: SDK 返回的用量对象、映射或 ``None``。
+    :return: 缺失字段已补零的核心 Token 用量对象。
+    :raises AdapterProtocolError: 供应商返回了非法用量字段。
+    """
 
     if raw_usage is None:
         return TokenUsage()
@@ -112,6 +144,13 @@ def _normalize_usage(raw_usage: Any) -> TokenUsage:
 
 
 def _normalize_tool_call(raw_call: Any) -> ToolCall:
+    """把一条供应商函数调用转换为核心工具调用。
+
+    :param raw_call: SDK 返回的单条工具调用对象或映射。
+    :return: 字段完整且不可变的 ``ToolCall``。
+    :raises AdapterProtocolError: 类型、调用 ID、函数名或参数字段不合法。
+    """
+
     call_type = _field(raw_call, "type")
     if call_type != "function":
         raise AdapterProtocolError("only function tool calls are accepted")
@@ -129,7 +168,12 @@ def _normalize_tool_call(raw_call: Any) -> ToolCall:
 
 
 def _normalize_assistant(raw_message: Any) -> AssistantMessage:
-    """规范化助手正文、思考内容和 function tool calls。"""
+    """规范化助手正文、思考内容和函数工具调用。
+
+    :param raw_message: SDK 返回的助手消息对象或映射。
+    :return: 与供应商无关的不可变助手消息。
+    :raises AdapterProtocolError: 角色、文本或工具调用集合不符合协议。
+    """
 
     # 第一步：确认消息角色，并读取两个可选文本字段。
     role = _field(raw_message, "role")
@@ -156,7 +200,12 @@ def _normalize_assistant(raw_message: Any) -> AssistantMessage:
 
 
 def normalize_completion(raw_response: Any) -> ModelCompletion:
-    """将一次 SDK 响应转换为与供应商无关的核心契约。"""
+    """将一次 SDK 响应转换为与供应商无关的核心契约。
+
+    :param raw_response: OpenAI SDK 返回的 Chat Completions 响应对象或映射。
+    :return: 经过严格字段校验的 ``ModelCompletion``。
+    :raises AdapterProtocolError: 响应选择数、完成原因或消息字段不合法。
+    """
 
     # 第一步：要求恰好一个选择，并单独校验完成原因。
     choices = _field(raw_response, "choices")
@@ -208,7 +257,16 @@ class DeepSeekAdapter:
         max_tokens: int = DEFAULT_MAX_TOKENS,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
     ) -> None:
-        """校验传输参数，并创建或接管一个禁用 SDK 自动重试的客户端。"""
+        """校验传输参数，并创建或接管一个禁用 SDK 自动重试的客户端。
+
+        :param client: 可选的兼容 OpenAI 客户端，主要供测试或自定义传输注入。
+        :param api_key: 创建默认客户端时使用的 DeepSeek API 密钥。
+        :param base_url: OpenAI 兼容接口的基础 URL。
+        :param model: 每次请求使用的模型标识。
+        :param max_tokens: 单次模型响应允许生成的最大 Token 数。
+        :param timeout_seconds: 适配器允许单次请求等待的最长秒数。
+        :raises ValueError: 参数非法，或同时提供 ``client`` 与 ``api_key``。
+        """
 
         # 第一步：校验模型、令牌上限、超时及客户端与密钥的互斥关系。
         if not isinstance(model, str) or not model:
@@ -230,9 +288,13 @@ class DeepSeekAdapter:
                 timeout=float(timeout_seconds),
             )
 
+        # 实际承担 HTTP 请求的 SDK 客户端。
         self._client = client
+        # 对外报告并随每次请求发送的模型标识。
         self.model = model
+        # 单次补全允许生成的 Token 上限。
         self.max_tokens = max_tokens
+        # 适配器级请求超时上限，调用方只能进一步缩短。
         self.timeout_seconds = float(timeout_seconds)
         self._close_lock = Lock()
         self._closed = False
@@ -262,7 +324,16 @@ class DeepSeekAdapter:
         *,
         timeout_seconds: float | None = None,
     ) -> ModelCompletion:
-        """发送一次非流式完成请求，并将 SDK 异常映射为稳定适配器错误。"""
+        """发送一次非流式完成请求，并将 SDK 异常映射为稳定适配器错误。
+
+        :param messages: 本轮完整且按协议排序的消息历史。
+        :param tools: 本轮允许模型调用的函数工具 Schema。
+        :param timeout_seconds: 核心状态机计算出的剩余请求时间；不能放宽适配器上限。
+        :return: 严格规范化后的模型完成结果。
+        :raises ValueError: 调用方超时值不是有限正数。
+        :raises AdapterRequestError: 网络、超时或供应商 HTTP 请求失败。
+        :raises AdapterProtocolError: 供应商响应不满足核心协议。
+        """
 
         # 第一步：把调用方时限压缩到适配器上限，并防御性复制消息和工具定义。
         effective_timeout = self.timeout_seconds

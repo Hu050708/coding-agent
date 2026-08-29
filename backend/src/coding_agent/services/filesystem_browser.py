@@ -14,11 +14,23 @@ class DirectoryBrowser:
     """列出允许根目录下的文件夹，且不跟随任何越界链接。"""
 
     def __init__(self, policy: WorkspacePolicy, *, max_entries: int = 500) -> None:
+        """初始化受限目录浏览器。
+
+        :param policy: 校验路径是否位于允许根目录内的策略。
+        :param max_entries: 单次最多返回的直接子目录数。
+        """
+
+        # 策略控制边界，数量上限避免巨大目录拖垮 API 响应。
         self.policy = policy
         self.max_entries = max_entries
 
     def browse(self, value: str | None = None) -> dict[str, object]:
-        """列出经过策略校验的直接子目录，并返回安全的父目录导航。"""
+        """列出经过策略校验的直接子目录，并返回安全的父目录导航。
+
+        :param value: 待浏览目录路径；None 表示允许根目录。
+        :return: 当前目录、边界内父目录、允许根目录和子目录列表。
+        :raises ApplicationError: 路径越界、无效或服务进程无法读取目录。
+        """
 
         # 第一步：规范化请求目录，并在读取前确认其位于允许根目录内。
         requested = os.fspath(self.policy.allowed_root) if value is None else value

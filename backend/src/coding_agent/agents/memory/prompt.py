@@ -17,6 +17,13 @@ class MemoryPromptBuilder:
     )
 
     def build(self, task: str, snapshot: MemorySnapshot) -> str:
+        """将项目记忆和当前任务组装成发送给模型的用户消息。
+
+        :param task: 用户本次提交的原始任务文本。
+        :param snapshot: 本次运行已经筛选、冻结的项目记忆快照。
+        :return: 没有可用记忆时返回原任务；否则返回包含安全声明、记忆和任务的 JSON。
+        """
+
         if snapshot.status != "loaded" or not snapshot.entries:
             return task
         payload = {

@@ -10,12 +10,16 @@ from enum import StrEnum
 
 
 class PermissionMode(StrEnum):
+    """命令执行与用户审批策略。"""
+
     ASK = "ask"
     AGENT = "agent"
     WORKSPACE_FULL = "workspace_full"
 
 
 class RunStatus(StrEnum):
+    """Agent 运行从创建到结束的持久化状态。"""
+
     STARTING = "starting"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
@@ -39,11 +43,15 @@ TERMINAL_RUN_STATUSES = frozenset(set(RunStatus) - set(ACTIVE_RUN_STATUSES))
 
 
 class MessageRole(StrEnum):
+    """允许持久化并向用户展示的消息角色。"""
+
     USER = "user"
     ASSISTANT = "assistant"
 
 
 class ApprovalStatus(StrEnum):
+    """危险工具操作审批的生命周期状态。"""
+
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
@@ -52,6 +60,8 @@ class ApprovalStatus(StrEnum):
 
 
 class MemoryKind(StrEnum):
+    """项目记忆正文的业务分类。"""
+
     PREFERENCE = "preference"
     FACT = "fact"
     DECISION = "decision"
@@ -59,6 +69,8 @@ class MemoryKind(StrEnum):
 
 
 class MemorySource(StrEnum):
+    """项目记忆的产生来源。"""
+
     MANUAL = "manual"
     RUN_RESULT = "run_result"
 

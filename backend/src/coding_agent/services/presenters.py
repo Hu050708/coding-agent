@@ -17,7 +17,12 @@ from coding_agent.repository import (
 
 
 def workspace_view(record: WorkspaceRecord, *, allowed_root: Path) -> dict[str, Any]:
-    """将工作区记录转换为不暴露完整允许根目录的 API 视图。"""
+    """将工作区记录转换为不暴露完整允许根目录的 API 视图。
+
+    :param record: 持久化层返回的工作区记录。
+    :param allowed_root: 配置的工作区允许根目录。
+    :return: 仅带相对路径提示的公开字典。
+    """
 
     try:
         relative = Path(record.canonical_path).relative_to(allowed_root)
@@ -39,7 +44,12 @@ def conversation_view(
     *,
     active_run: RunRecord | None = None,
 ) -> dict[str, Any]:
-    """生成会话视图，并在活动运行属于该会话时附加运行编号。"""
+    """生成会话视图，并在活动运行属于该会话时附加运行编号。
+
+    :param record: 会话持久化记录。
+    :param active_run: 工作区当前活动运行；可以属于其他会话。
+    :return: 含可选活动运行 ID 的会话公开字典。
+    """
 
     return {
         "id": record.id,
@@ -58,7 +68,11 @@ def conversation_view(
 
 
 def message_view(record: MessageRecord) -> dict[str, Any]:
-    """将消息记录转换为稳定的公开字段。"""
+    """将消息记录转换为稳定的公开字段。
+
+    :param record: 消息持久化记录。
+    :return: HTTP 响应可直接校验的消息字典。
+    """
 
     return {
         "id": record.id,
@@ -72,7 +86,11 @@ def message_view(record: MessageRecord) -> dict[str, Any]:
 
 
 def event_view(record: RunEventRecord) -> dict[str, Any]:
-    """将可重放运行事件转换为 SSE/API 共用视图。"""
+    """将可重放运行事件转换为 SSE/API 共用视图。
+
+    :param record: 已经过持久化白名单清洗的事件记录。
+    :return: 含序号、类型、时间和独立数据字典的事件视图。
+    """
 
     return {
         "seq": record.seq,
@@ -83,7 +101,11 @@ def event_view(record: RunEventRecord) -> dict[str, Any]:
 
 
 def memory_view(record: MemoryEntryRecord) -> dict[str, Any]:
-    """将长期记忆记录转换为前端可编辑视图。"""
+    """将长期记忆记录转换为前端可编辑视图。
+
+    :param record: 项目记忆持久化记录。
+    :return: 不含内部正文哈希和删除字段的公开字典。
+    """
 
     return {
         "id": record.id,

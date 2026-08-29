@@ -44,10 +44,21 @@ class MemoryRepository:
     """管理工作区记忆以及绑定到运行的不可变快照。"""
 
     def __init__(self, session: Session) -> None:
+        """绑定当前事务使用的 ORM 会话。
+
+        :param session: 由上层负责事务边界的 SQLAlchemy 会话。
+        """
+
         self.session = session
 
     @staticmethod
     def content_hash(content: str) -> str:
+        """计算去除首尾空白后正文的 SHA-256 哈希。
+
+        :param content: 非空记忆正文。
+        :return: 用于活动条目唯一约束的十六进制摘要。
+        """
+
         normalized = _required_text(content, label="content")
         return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
@@ -62,7 +73,17 @@ class MemoryRepository:
         pinned: bool = False,
         enabled: bool = True,
     ) -> MemoryEntry:
-        """创建一条经过确认、可参与后续运行上下文的工作区记忆。"""
+        """创建一条经过确认、可参与后续运行上下文的工作区记忆。
+
+        :param workspace_id: 记忆所属工作区 ID。
+        :param kind: 记忆业务分类。
+        :param content: 不超过配置上限的非空正文。
+        :param source: 人工或运行结果来源。
+        :param source_run_id: 可选的已完成来源运行 ID。
+        :param pinned: 是否在快照选择时优先。
+        :param enabled: 是否允许用于后续上下文。
+        :return: 已计算哈希并 flush 的记忆实体。
+        """
 
         # 第一步：规范化正文并计算内容哈希，后续可据此识别重复或变更。
         clean_content = _required_text(
@@ -94,6 +115,15 @@ class MemoryRepository:
         include_deleted: bool = False,
         for_update: bool = False,
     ) -> MemoryEntry | None:
+        """按 ID 查询记忆并可约束其工作区归属。
+
+        :param memory_id: 记忆 ID。
+        :param workspace_id: 可选的所属工作区 ID 限制。
+        :param include_deleted: 是否允许返回已软删除记录。
+        :param for_update: 是否获取行级写锁。
+        :return: 匹配实体；不存在时为 None。
+        """
+
         statement = select(MemoryEntry).where(
             MemoryEntry.id == as_uuid(memory_id, label="memory_id")
         )
@@ -114,6 +144,14 @@ class MemoryRepository:
         enabled_only: bool = False,
         limit: int = 500,
     ) -> list[MemoryEntry]:
+        """按优先级列出工作区记忆。
+
+        :param workspace_id: 工作区 ID。
+        :param enabled_only: 是否只返回可用于上下文的条目。
+        :param limit: 最大条目数，实际限制在 1 到 2000。
+        :return: 置顶优先、再按更新时间倒序的记忆列表。
+        """
+
         statement = select(MemoryEntry).where(
             MemoryEntry.workspace_id == as_uuid(workspace_id, label="workspace_id"),
             MemoryEntry.deleted_at.is_(None),
@@ -135,7 +173,17 @@ class MemoryRepository:
         pinned: bool | None = None,
         enabled: bool | None = None,
     ) -> MemoryEntry:
-        """锁定并部分更新一条工作区记忆。"""
+        """锁定并部分更新一条工作区记忆。
+
+        :param memory_id: 目标记忆 ID。
+        :param workspace_id: 所属工作区 ID，用于阻止跨工作区修改。
+        :param kind: 新分类；None 表示不修改。
+        :param content: 新正文；None 表示不修改。
+        :param pinned: 新置顶状态；None 表示不修改。
+        :param enabled: 新启用状态；None 表示不修改。
+        :return: 更新并 flush 后的记忆实体。
+        :raises PersistenceNotFoundError: 条目不存在或不属于指定工作区。
+        """
 
         # 第一步：限定工作区查找并加行锁，避免跨工作区或并发覆盖。
         item = self.get(memory_id, workspace_id=workspace_id, for_update=True)
@@ -161,6 +209,14 @@ class MemoryRepository:
     def soft_delete(
         self, memory_id: UUIDLike, *, workspace_id: UUIDLike
     ) -> MemoryEntry:
+        """软删除并禁用一条工作区记忆。
+
+        :param memory_id: 目标记忆 ID。
+        :param workspace_id: 所属工作区 ID。
+        :return: 标记删除后的记忆实体。
+        :raises PersistenceNotFoundError: 条目不存在或不属于指定工作区。
+        """
+
         item = self.get(memory_id, workspace_id=workspace_id, for_update=True)
         if item is None:
             raise PersistenceNotFoundError("memory entry was not found")
@@ -171,6 +227,12 @@ class MemoryRepository:
         return item
 
     def purge_workspace(self, workspace_id: UUIDLike) -> int:
+        """物理删除工作区的所有记忆条目。
+
+        :param workspace_id: 待清理工作区 ID。
+        :return: 数据库报告的删除行数。
+        """
+
         result = self.session.execute(
             delete(MemoryEntry).where(
                 MemoryEntry.workspace_id == as_uuid(workspace_id, label="workspace_id")
@@ -187,7 +249,16 @@ class MemoryRepository:
         limit: int = MAX_MEMORY_ENTRIES,
         max_content_chars: int = MAX_MEMORY_CHARS,
     ) -> list[RunMemory]:
-        """为运行创建一次不可变、有字符预算且顺序稳定的记忆快照。"""
+        """为运行创建一次不可变、有字符预算且顺序稳定的记忆快照。
+
+        :param run_id: 接收快照的运行 ID。
+        :param workspace_id: 提供候选记忆的工作区 ID。
+        :param limit: 最多捕获的条目数，受全局上限约束。
+        :param max_content_chars: 所有快照正文允许占用的总字符数。
+        :return: 按上下文位置排列的已持久化快照实体。
+        :raises PersistenceConflictError: 该运行已经存在不可变快照。
+        :raises ValueError: 字符预算不是正整数。
+        """
 
         # 第一步：拒绝重复快照，并规范化条目数和字符数上限。
         run_uuid = as_uuid(run_id, label="run_id")
@@ -231,6 +302,12 @@ class MemoryRepository:
         return snapshots
 
     def list_snapshot(self, run_id: UUIDLike) -> list[RunMemory]:
+        """读取一次运行冻结的项目记忆。
+
+        :param run_id: 运行 ID。
+        :return: 按上下文位置升序排列的快照列表。
+        """
+
         return list(
             self.session.scalars(
                 select(RunMemory)
@@ -238,4 +315,3 @@ class MemoryRepository:
                 .order_by(RunMemory.position)
             )
         )
-

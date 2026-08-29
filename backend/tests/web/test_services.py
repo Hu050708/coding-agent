@@ -7,10 +7,23 @@ import threading
 
 import pytest
 
+from coding_agent.agents import AgentConfig
 from coding_agent.settings import AppSettings
 from coding_agent.agents.runtime.event_buffer import EventBuffer
 from coding_agent.agents.runtime.run_manager import BufferTrace
 from coding_agent.agents.security import WorkspacePolicy, WorkspacePolicyError
+
+
+def test_web_agent_budget_defaults_come_from_agent_config() -> None:
+    config = AgentConfig()
+    fields = AppSettings.model_fields
+
+    assert fields["max_model_calls"].default == config.max_model_calls
+    assert fields["max_tool_calls"].default == config.max_tool_calls
+    assert fields["max_total_tokens"].default == config.max_total_tokens
+    assert fields["wall_time_seconds"].default == config.wall_time_seconds
+    assert fields["api_timeout_seconds"].default == config.api_timeout_seconds
+    assert fields["max_transient_retries"].default == config.max_transient_retries
 
 
 def test_settings_load_env_file_without_exposing_secret(tmp_path):

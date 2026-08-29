@@ -19,6 +19,11 @@ depends_on: Sequence[str] | None = None
 
 
 def _timestamps() -> list[sa.Column]:
+    """创建所有可更新时间实体共用的时间戳列。
+
+    :return: 数据库生成的 ``created_at`` 和 ``updated_at`` 列定义。
+    """
+
     return [
         sa.Column(
             "created_at",

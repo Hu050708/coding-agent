@@ -7,6 +7,7 @@ import json
 import pytest
 
 from coding_agent.agents import (
+    AgentConfig,
     AgentContext,
     AgentContextBuilder,
     MemoryReference,
@@ -38,39 +39,42 @@ def test_context_accepts_only_visible_user_and_assistant_records() -> None:
 
 
 def test_context_keeps_newest_messages_within_budgets() -> None:
-    context = AgentContextBuilder(
-        max_prior_messages=2,
-        max_prior_chars=5,
-        max_message_chars=4,
-    ).build(
+    context = AgentContextBuilder().build(
+        config=AgentConfig(
+            max_prior_messages=2,
+            max_prior_chars=5,
+            max_message_chars=4,
+        ),
         prior_messages=(
             VisibleMessage("user", "old"),
             VisibleMessage("assistant", "bb"),
             VisibleMessage("user", "ccc"),
-        )
+        ),
     )
     assert [message.content for message in context.prior_messages] == ["bb", "ccc"]
     assert context.dropped_prior_messages == 1
 
 
 def test_oversized_persisted_message_is_a_recoverable_truncation_boundary() -> None:
-    context = AgentContextBuilder(
-        max_prior_messages=10,
-        max_prior_chars=100,
-        max_message_chars=8,
-    ).build(
+    context = AgentContextBuilder().build(
+        config=AgentConfig(
+            max_prior_messages=10,
+            max_prior_chars=100,
+            max_message_chars=8,
+        ),
         prior_messages=(
             VisibleMessage("user", "older"),
             VisibleMessage("assistant", "x" * 20),
             VisibleMessage("user", "latest"),
-        )
+        ),
     )
 
     assert context.prior_messages == (VisibleMessage("user", "latest"),)
     assert context.dropped_prior_messages == 2
 
-    latest_too_large = AgentContextBuilder(max_message_chars=4).build(
-        prior_messages=(VisibleMessage("user", "persisted valid long request"),)
+    latest_too_large = AgentContextBuilder().build(
+        config=AgentConfig(max_message_chars=4),
+        prior_messages=(VisibleMessage("user", "persisted valid long request"),),
     )
     assert latest_too_large.prior_messages == ()
     assert latest_too_large.dropped_prior_messages == 1
@@ -86,6 +90,23 @@ def test_memory_is_immutable_user_data_with_current_task_last() -> None:
     ]
     assert list(payload)[-1] == "current_task"
     assert payload["current_task"] == "Fix one test"
+
+
+def test_memory_limits_come_from_agent_config() -> None:
+    context = AgentContextBuilder().build(
+        config=AgentConfig(
+            max_memory_entries=2,
+            max_memory_chars=5,
+            max_memory_item_chars=4,
+        ),
+        memory_entries=(
+            MemoryReference("m1", "decision", "abc"),
+            MemoryReference("m2", "fact", "de"),
+            MemoryReference("m3", "fact", "f"),
+        ),
+    )
+
+    assert [entry.id for entry in context.memory_entries] == ["m1", "m2"]
 
 
 def test_prior_history_is_one_compact_json_transcript() -> None:

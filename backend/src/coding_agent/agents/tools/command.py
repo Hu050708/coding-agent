@@ -33,6 +33,13 @@ class _BoundedBytes:
     """保留固定大小的头尾内容，同时统计排空的全部字节。"""
 
     def __init__(self, limit: int) -> None:
+        """创建保留头尾片段的有界字节缓冲区。
+
+        :param limit: 最终最多保留的字节总数，不能小于 64。
+        :raises ValueError: 输出上限过小。
+        """
+
+        # 允许保留的总字节数。
         if limit < 64:
             raise ValueError("The output limit must be at least 64 bytes.")
         self.limit = limit
@@ -43,6 +50,11 @@ class _BoundedBytes:
         self.total_bytes = 0
 
     def feed(self, chunk: bytes) -> None:
+        """计数并吸收一块子进程输出。
+
+        :param chunk: 从标准输出或错误输出读取的新字节块。
+        """
+
         self.total_bytes += len(chunk)
         if len(self.head) < self.head_limit:
             take = min(self.head_limit - len(self.head), len(chunk))
@@ -55,13 +67,25 @@ class _BoundedBytes:
 
     @property
     def truncated(self) -> bool:
+        """判断子进程输出是否超过保留容量。
+
+        :return: 至少有一个字节被省略时为 True。
+        """
+
         return self.total_bytes > len(self.head) + len(self.tail)
 
     @property
     def omitted_bytes(self) -> int:
+        """计算未保留在头尾片段中的字节数。
+
+        :return: 非负的省略字节数量。
+        """
+
         return max(0, self.total_bytes - len(self.head) - len(self.tail))
 
     def render(self) -> tuple[str, str]:
+        """:return: 解码后的有界文本及实际采用的编码标签。"""
+
         if not self.truncated:
             return _decode_bytes(bytes(self.head + self.tail))
 
@@ -76,10 +100,21 @@ class _WindowsKillJob:
     """持有关闭时会终止全部关联进程的 Windows 作业对象。"""
 
     def __init__(self, handle: Any, close_handle: Callable[[Any], Any]) -> None:
+        """接管一个 Windows 作业句柄及其关闭函数。
+
+        :param handle: 已关联子进程的原生 Windows 作业句柄。
+        :param close_handle: 关闭句柄并触发作业进程终止的系统函数。
+        """
+
         self._handle = handle
         self._close_handle = close_handle
 
     def close(self) -> bool:
+        """幂等关闭 Windows 作业句柄并触发进程树终止。
+
+        :return: 句柄已关闭或系统关闭调用成功时为 True。
+        """
+
         handle, self._handle = self._handle, None
         if handle is None:
             return True
@@ -99,7 +134,18 @@ def run_command(
     max_output_bytes: int = 12_000,
     timeout_cap_seconds: float | None = None,
 ) -> dict[str, Any]:
-    """按权限策略执行命令，并对时限、输出量及子进程树进行统一控制。"""
+    """按权限策略执行命令，并对时限、输出量及子进程树进行统一控制。
+
+    :param workspace: 解析工作目录、可执行文件和安全环境的工作区对象。
+    :param arguments: ``argv``、可选工作目录和请求超时组成的工具参数。
+    :param confirm_action: 风险命令需要人工审批时调用的同步回调。
+    :param permission_policy: 本次运行冻结的工具与命令权限策略。
+    :param cancel_check: 执行前及执行期间检查用户取消状态的回调。
+    :param max_output_bytes: 标准输出和错误输出各自允许保留的最大字节数。
+    :param timeout_cap_seconds: Agent 剩余墙钟时间对本命令施加的额外上限。
+    :return: 退出状态、有界输出以及耗时、截断和进程树清理元数据。
+    :raises ToolError: 参数、权限、审批、超时、取消或命令退出状态不合法。
+    """
 
     # 第一步：严格校验模型参数，并把单次命令超时压缩到运行剩余时限内。
     reject_unknown(arguments, {"argv", "cwd", "timeout_seconds"})
@@ -311,6 +357,12 @@ def run_command(
 
 
 def _drain_pipe(pipe: BinaryIO, capture: _BoundedBytes) -> None:
+    """持续排空一个子进程管道，防止进程因缓冲区写满而阻塞。
+
+    :param pipe: 子进程标准输出或错误输出的二进制管道。
+    :param capture: 接收并截断输出的有界字节缓冲区。
+    """
+
     try:
         while True:
             chunk = pipe.read(8192)
@@ -327,6 +379,12 @@ def _drain_pipe(pipe: BinaryIO, capture: _BoundedBytes) -> None:
 
 
 def _finish_drain(pipe: BinaryIO, thread: threading.Thread) -> None:
+    """等待排空线程结束，必要时关闭管道促使线程退出。
+
+    :param pipe: 排空线程正在读取的管道。
+    :param thread: 对应的后台排空线程。
+    """
+
     thread.join(timeout=3)
     if thread.is_alive():
         try:
@@ -337,6 +395,12 @@ def _finish_drain(pipe: BinaryIO, thread: threading.Thread) -> None:
 
 
 def _cancel_requested(cancel_check: CancellationCheck | None) -> bool:
+    """安全查询建议性的外部取消信号。
+
+    :param cancel_check: 可选取消状态回调。
+    :return: 回调明确返回真值时为 ``True``；缺失或异常时为 ``False``。
+    """
+
     if cancel_check is None:
         return False
     try:
@@ -352,7 +416,13 @@ def _stop_process_tree(
     environment: Mapping[str, str],
     process_job: _WindowsKillJob | None,
 ) -> bool:
-    """终止命令及其子进程，并返回进程树清理是否完整成功。"""
+    """终止命令及其子进程，并返回进程树清理是否完整成功。
+
+    :param process: 要终止的主子进程对象。
+    :param environment: 供 Windows ``taskkill`` 使用的最小安全环境。
+    :param process_job: 创建进程时绑定的 Windows 作业对象；其他平台为空。
+    :return: 成功使用树级终止机制且无需退化时返回 ``True``。
+    """
 
     # 第一步：优先使用创建进程时绑定的平台级进程组或 Windows 作业对象。
     if process_job is not None:
@@ -379,6 +449,12 @@ def _stop_process_tree(
 
 
 def _force_kill_posix_process_group(process_group_id: int) -> bool:
+    """向 POSIX 进程组发送强制终止信号。
+
+    :param process_group_id: 需要清理的进程组 ID，通常等于主进程 PID。
+    :return: 进程组已不存在或信号发送成功时返回 ``True``。
+    """
+
     try:
         os.killpg(process_group_id, signal.SIGKILL)
         return True
@@ -391,13 +467,19 @@ def _force_kill_posix_process_group(process_group_id: int) -> bool:
 def _create_windows_kill_job(
     process: subprocess.Popen[bytes],
 ) -> _WindowsKillJob | None:
-    """Windows 允许时，将子进程加入关闭即终止的作业对象。"""
+    """Windows 允许时，将子进程加入关闭即终止的作业对象。
+
+    :param process: 已启动且暴露原生句柄的 Windows 子进程。
+    :return: 成功配置的作业对象；平台或权限不支持时返回 ``None``。
+    """
 
     try:
         import ctypes
         from ctypes import wintypes
 
         class _BasicLimitInformation(ctypes.Structure):
+            """Windows 作业对象的基础资源限制结构。"""
+
             _fields_ = [
                 ("PerProcessUserTimeLimit", ctypes.c_longlong),
                 ("PerJobUserTimeLimit", ctypes.c_longlong),
@@ -411,6 +493,8 @@ def _create_windows_kill_job(
             ]
 
         class _IoCounters(ctypes.Structure):
+            """Windows 作业对象累计的输入输出计数结构。"""
+
             _fields_ = [
                 ("ReadOperationCount", ctypes.c_ulonglong),
                 ("WriteOperationCount", ctypes.c_ulonglong),
@@ -421,6 +505,8 @@ def _create_windows_kill_job(
             ]
 
         class _ExtendedLimitInformation(ctypes.Structure):
+            """组合基础限制、I/O 计数和内存限制的扩展结构。"""
+
             _fields_ = [
                 ("BasicLimitInformation", _BasicLimitInformation),
                 ("IoInfo", _IoCounters),
@@ -478,6 +564,12 @@ def _create_windows_kill_job(
 
 
 def _decode_bytes(data: bytes) -> tuple[str, str]:
+    """优先按 UTF-8 解码命令输出，失败时使用系统首选编码替换坏字节。
+
+    :param data: 捕获到的有界输出字节。
+    :return: 可展示文本及采用的编码名称。
+    """
+
     try:
         return data.decode("utf-8"), "utf-8"
     except UnicodeDecodeError:
@@ -486,7 +578,12 @@ def _decode_bytes(data: bytes) -> tuple[str, str]:
 
 
 def _terminate_process_tree(process: subprocess.Popen[bytes], environment: Mapping[str, str]) -> bool:
-    """按平台终止进程树，并返回是否成功使用了树级终止机制。"""
+    """按平台终止进程树，并返回是否成功使用了树级终止机制。
+
+    :param process: 要终止的主子进程。
+    :param environment: 查找固定系统工具时使用的最小环境映射。
+    :return: 树级终止机制成功或进程已经结束时返回 ``True``。
+    """
 
     # 第一步：Windows 优先调用固定系统路径下的 taskkill 终止整棵子进程树。
     if process.poll() is not None:

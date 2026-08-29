@@ -23,7 +23,6 @@ from coding_agent.agents.providers import (
     DEFAULT_BASE_URL,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MODEL,
-    DEFAULT_TIMEOUT_SECONDS,
     DeepSeekAdapter,
 )
 from coding_agent.agents.security import CommandRequest, Workspace, WorkspaceError
@@ -37,6 +36,12 @@ EXIT_CANCELLED = 130
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """构建单次 Agent 运行的 CLI 参数解析器。
+
+    :return: 默认预算从当前 ``AgentConfig`` 派生的解析器。
+    """
+
+    defaults = AgentConfig()
     parser = argparse.ArgumentParser(
         prog="coding-agent",
         description="在一个工作区中运行 Coding Agent 本地智能体循环。",
@@ -55,17 +60,27 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"兼容 OpenAI 的 API 基础 URL（默认值：{DEFAULT_BASE_URL}）。",
     )
     parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
-    parser.add_argument("--max-model-calls", type=int, default=16)
-    parser.add_argument("--max-tool-calls", type=int, default=40)
-    parser.add_argument("--max-total-tokens", type=int, default=200_000)
-    parser.add_argument("--wall-time", type=float, default=480.0, metavar="SECONDS")
+    parser.add_argument("--max-model-calls", type=int, default=defaults.max_model_calls)
+    parser.add_argument("--max-tool-calls", type=int, default=defaults.max_tool_calls)
+    parser.add_argument("--max-total-tokens", type=int, default=defaults.max_total_tokens)
+    parser.add_argument(
+        "--wall-time",
+        type=float,
+        default=defaults.wall_time_seconds,
+        metavar="SECONDS",
+    )
     parser.add_argument(
         "--api-timeout",
         type=float,
-        default=DEFAULT_TIMEOUT_SECONDS,
+        default=defaults.api_timeout_seconds,
         metavar="SECONDS",
     )
-    parser.add_argument("--retries", type=int, default=3, help="每轮模型请求的最大瞬时错误重试次数。")
+    parser.add_argument(
+        "--retries",
+        type=int,
+        default=defaults.max_transient_retries,
+        help="每轮模型请求的最大瞬时错误重试次数。",
+    )
     parser.add_argument(
         "--yes",
         action="store_true",
@@ -76,6 +91,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _valid_base_url(value: str) -> bool:
+    """验证模型 API 基础 URL 不携带凭据、查询或片段。
+
+    :param value: 用户提供的 URL 文本。
+    :return: URL 为无凭据 HTTP(S) 服务地址时为 True。
+    """
+
     try:
         parsed = urlsplit(value)
     except ValueError:
@@ -91,6 +112,12 @@ def _valid_base_url(value: str) -> bool:
 
 
 def _trace_file(workspace: Workspace) -> Path:
+    """为本次 CLI 运行生成不冲突的诊断文件路径。
+
+    :param workspace: 已验证的 Agent 工作区。
+    :return: 工作区隐藏追踪目录中的时间戳 JSONL 路径。
+    """
+
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return workspace.root / ".coding-agent-traces" / f"run-{timestamp}-{uuid4().hex[:8]}.jsonl"
 
@@ -98,7 +125,20 @@ def _trace_file(workspace: Workspace) -> Path:
 def _confirmation_callback(
     *, input_func: Callable[[str], str], stream: TextIO
 ) -> Callable[[CommandRequest], bool]:
+    """创建交互式命令审批回调。
+
+    :param input_func: 读取用户输入的函数，允许测试替换。
+    :param stream: 显示审批摘要和原因的文本流。
+    :return: 接收命令请求并返回是否同意的回调。
+    """
+
     def confirm(request: CommandRequest) -> bool:
+        """向用户展示安全摘要并解析肯定答复。
+
+        :param request: 已由命令安全策略分类的审批请求。
+        :return: 用户输入 y 或 yes 时为 True，其他情况为 False。
+        """
+
         # JSON 编码可防止模型提供的控制字符被终端解释；该文本仅用于交互，
         # 绝不会复制到诊断跟踪中。
         if request.argv:
@@ -117,6 +157,13 @@ def _confirmation_callback(
 
 
 def _safe_error(exc: BaseException, *, secret: str | None = None) -> str:
+    """将异常压缩为可显示且隐藏已知密钥的单行文本。
+
+    :param exc: 待展示的异常。
+    :param secret: 可选敏感文本，出现时替换为星号。
+    :return: 已清理换行、密钥和终端控制字符的错误摘要。
+    """
+
     text = str(exc).replace("\r", " ").replace("\n", " ")
     if secret:
         text = text.replace(secret, "***")
@@ -125,7 +172,11 @@ def _safe_error(exc: BaseException, *, secret: str | None = None) -> str:
 
 
 def _terminal_safe(text: str) -> str:
-    """在保留普通文本布局的同时转义终端控制字符。"""
+    """在保留普通文本布局的同时转义终端控制字符。
+
+    :param text: 可能来自模型或异常的任意文本。
+    :return: 保留换行和制表符、其余控制字符转成 Unicode 转义的文本。
+    """
 
     rendered: list[str] = []
     for character in text:
@@ -147,7 +198,15 @@ def run_cli(
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
 ) -> int:
-    """装配并执行一次 CLI 运行，将所有终态映射为稳定输出和退出码。"""
+    """装配并执行一次 CLI 运行，将所有终态映射为稳定输出和退出码。
+
+    :param options: ``build_parser`` 解析后的命令行命名空间。
+    :param environ: 可选环境变量映射；None 表示当前进程环境。
+    :param input_func: 读取审批输入的函数。
+    :param stdout: 写入最终模型内容的标准输出流。
+    :param stderr: 写入状态、诊断和错误的标准错误流。
+    :return: 成功、运行失败、配置错误或用户取消对应的稳定退出码。
+    """
 
     # 第一步：在创建任何外部资源前校验密钥、任务和服务地址。
     environment = os.environ if environ is None else environ
@@ -219,6 +278,12 @@ def run_cli(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """解析命令行并执行一次 CLI Agent 任务。
+
+    :param argv: 可选参数序列；None 表示读取当前进程命令行。
+    :return: 可直接作为进程退出状态的整数代码。
+    """
+
     options = build_parser().parse_args(argv)
     return run_cli(options)
 

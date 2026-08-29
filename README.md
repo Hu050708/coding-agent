@@ -150,6 +150,20 @@ coding-agent --workspace E:\path\to\project "修复日期边界问题，补回�
 CLI 只读取当前终端进程中的 `DEEPSEEK_API_KEY`，不会读取 `backend/.env`。默认逐条确认
 非白名单命令；`--yes` 只能批准策略判定为 `CONFIRM` 的命令，不能绕过 `DENY`。
 
+## 可复现 Agent 评测
+
+项目内置 Bug 修复、多文件功能和配置回归三类合成任务。每次试验都会复制全新工作区，
+运行同一个 Agent CLI，再由工作区外 verifier 验收；模型最终回答不作为成功依据。
+
+```powershell
+Set-Location E:\code\coding-agent\backend
+python -m evaluation.run_benchmark --model deepseek-v4-flash --repeats 3
+```
+
+系统会生成逐轮 JSON、汇总 JSON 和中文 Markdown 报告，包含调用次数、Token、耗时、
+工具失败、文件变化、终止原因和独立验收结果。详细说明见
+[`backend/evaluation/README.md`](backend/evaluation/README.md)。
+
 ## 验证
 
 后端：

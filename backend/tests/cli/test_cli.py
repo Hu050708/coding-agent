@@ -6,12 +6,24 @@ import io
 from types import SimpleNamespace
 
 import coding_agent.cli as cli
-from coding_agent.agents import AgentStatus, TerminationReason
+from coding_agent.agents import AgentConfig, AgentStatus, TerminationReason
 from coding_agent.agents.security import CommandDecision, CommandRequest
 
 
 def _options(tmp_path, *extra: str):
     return cli.build_parser().parse_args(["--workspace", str(tmp_path), *extra, "fix the bug"])
+
+
+def test_cli_budget_defaults_come_from_agent_config(tmp_path) -> None:
+    options = _options(tmp_path)
+    config = AgentConfig()
+
+    assert options.max_model_calls == config.max_model_calls
+    assert options.max_tool_calls == config.max_tool_calls
+    assert options.max_total_tokens == config.max_total_tokens
+    assert options.wall_time == config.wall_time_seconds
+    assert options.api_timeout == config.api_timeout_seconds
+    assert options.retries == config.max_transient_retries
 
 
 def test_missing_key_fails_without_constructing_adapter(tmp_path, monkeypatch):

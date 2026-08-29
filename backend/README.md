@@ -32,7 +32,7 @@ CLI / Web 请求
    编辑和测试流程，不需要 API 密钥，最容易看清 Agent 的一次完整工作过程。
 2. **认识配置和输入输出数据**：先阅读 `agents/config.py` 中的 `AgentConfig`，再阅读
    `agents/contracts.py` 中的 `ToolCall`、`ModelCompletion` 和 `RunResult`。前者规定一次
-   Agent 运行的资源边界，后者定义模型、工具和 Agent 之间传递的数据。
+   Agent 运行的资源与上下文边界，后者定义模型、工具和 Agent 之间传递的数据。
 3. **理解核心循环**：阅读 `agents/agent.py` 的 `Agent.run()`。可以按步骤关注：请求模型、
    解析工具调用、执行工具、把结果加入历史、检查终止条件。这里是整个项目最重要的文件。
 4. **理解模型如何接入**：阅读 `agents/providers/deepseek.py`，看 DeepSeek 返回值如何被
@@ -146,3 +146,13 @@ coding-agent-web --help
 ```powershell
 python scripts/run_demo_trial.py
 ```
+
+运行三类任务、每类三次的可复现评测：
+
+```powershell
+python -m evaluation.run_benchmark --model deepseek-v4-flash --repeats 3
+```
+
+每轮都从全新任务副本开始，并由 Agent 工作区外的 verifier 判定结果。结构化结果和中文
+报告写入 `tmp/benchmark-runs/`；任务设计、失败分类和报告字段见
+[`evaluation/README.md`](evaluation/README.md)。

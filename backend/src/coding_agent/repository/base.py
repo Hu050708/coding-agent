@@ -96,10 +96,23 @@ class PersistenceConflictError(RuntimeError):
 
 
 def utc_now() -> datetime:
+    """取得带 UTC 时区的当前时间。
+
+    :return: 可直接写入带时区数据库列的当前时间。
+    """
+
     return datetime.now(timezone.utc)
 
 
 def as_uuid(value: UUIDLike, *, label: str = "id") -> UUID:
+    """把 UUID 对象或字符串转换为统一 UUID 类型。
+
+    :param value: UUID 对象或可解析的 UUID 文本。
+    :param label: 出错时用于指出具体字段的名称。
+    :return: 规范 UUID 对象。
+    :raises ValueError: 输入无法解析为 UUID。
+    """
+
     if isinstance(value, UUID):
         return value
     try:
@@ -109,6 +122,15 @@ def as_uuid(value: UUIDLike, *, label: str = "id") -> UUID:
 
 
 def _required_text(value: str, *, label: str, limit: int | None = None) -> str:
+    """校验必填文本并统一去除首尾空白。
+
+    :param value: 待校验的原始文本。
+    :param label: 出错信息中使用的字段名称。
+    :param limit: 可选的最大字符数。
+    :return: 清理后的非空文本。
+    :raises ValueError: 输入不是文本、为空或超过长度限制。
+    """
+
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"{label} must be non-empty text")
     result = value.strip()
@@ -118,6 +140,13 @@ def _required_text(value: str, *, label: str, limit: int | None = None) -> str:
 
 
 def _validate_run_transition(current: RunStatus, target: RunStatus) -> None:
+    """验证运行状态机是否允许指定迁移。
+
+    :param current: 运行当前状态。
+    :param target: 调用方希望写入的目标状态。
+    :raises PersistenceConflictError: 当前状态不允许迁移到目标状态。
+    """
+
     if current is target:
         return
     if target not in _RUN_TRANSITIONS.get(current, frozenset()):

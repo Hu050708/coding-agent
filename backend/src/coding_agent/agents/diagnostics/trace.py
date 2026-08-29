@@ -55,11 +55,18 @@ _SENSITIVE_NAME = re.compile(
 
 
 def utc_timestamp() -> str:
+    """:return: 毫秒精度、以 ``Z`` 结尾的当前 UTC ISO-8601 时间。"""
+
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
 def summarize_argv(argv: list[str] | tuple[str, ...], *, max_chars: int = 160) -> str:
-    """为诊断事件生成刻意有损的命令摘要。"""
+    """为诊断事件生成刻意有损的命令摘要。
+
+    :param argv: 已拆分的命令参数序列。
+    :param max_chars: 最终摘要允许包含的最大字符数。
+    :return: 保留可执行文件名和选项名、隐藏普通参数内容的摘要。
+    """
 
     pieces: list[str] = []
     for index, raw in enumerate(argv[:12]):
@@ -77,6 +84,12 @@ def summarize_argv(argv: list[str] | tuple[str, ...], *, max_chars: int = 160) -
 
 
 def _safe_usage(value: Any) -> dict[str, int]:
+    """筛选允许写入诊断日志的非负 Token 用量。
+
+    :param value: 候选用量映射。
+    :return: 只包含白名单用量字段的普通字典。
+    """
+
     if not isinstance(value, Mapping):
         return {}
     return {
@@ -87,6 +100,13 @@ def _safe_usage(value: Any) -> dict[str, int]:
 
 
 def _safe_value(key: str, value: Any) -> Any:
+    """把单个事件字段规范化为可安全序列化的值。
+
+    :param key: 事件字段名称。
+    :param value: 调用方提供的原始字段值。
+    :return: 白名单用量字典、JSON 标量或不可信对象的字符串表示。
+    """
+
     if key == "usage":
         return _safe_usage(value)
     if value is None or isinstance(value, (str, int, float, bool)):
@@ -98,12 +118,26 @@ class TraceWriter:
     """以 JSON Lines 记录追加五种受支持事件。"""
 
     def __init__(self, path: str | Path | None = None, *, stream: TextIO | None = None) -> None:
+        """创建文件和/或文本流诊断写入器。
+
+        :param path: 可选 JSONL 文件路径；写入前会解析为绝对路径。
+        :param stream: 可选文本流，适合把同一事件同步输出到终端。
+        """
+
+        # 诊断 JSONL 的绝对输出路径；为空时不写文件。
         self.path = Path(path).resolve() if path is not None else None
+        # 可选镜像输出流。
         self.stream = stream
         self._lock = threading.Lock()
 
     def emit(self, event: str, /, **fields: Any) -> dict[str, Any]:
-        """筛选并追加一条不含敏感字段的诊断事件。"""
+        """筛选并追加一条不含敏感字段的诊断事件。
+
+        :param event: ``EVENT_FIELDS`` 中声明的事件名称。
+        :param fields: 候选结构化字段；未知或敏感字段会被丢弃。
+        :return: 实际写入文件或流的安全事件记录。
+        :raises ValueError: 事件名称不在支持列表中。
+        """
 
         # 第一步：只接收预先声明的事件类型和字段，并对字段值进行安全归一化。
         if event not in EVENT_FIELDS:
@@ -131,4 +165,6 @@ class NullTrace(TraceWriter):
     """丢弃诊断事件，同时保持相同接口。"""
 
     def __init__(self) -> None:
+        """创建不写文件也不写流的空诊断接收器。"""
+
         super().__init__()

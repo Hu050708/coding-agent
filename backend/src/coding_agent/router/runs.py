@@ -35,6 +35,14 @@ def create_run(
     payload: ConversationRunCreateRequest,
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> dict[str, object]:
+    """在会话中创建或幂等取得一次 Agent 运行。
+
+    :param conversation_id: URL 路径中的会话 UUID。
+    :param payload: 已校验的运行创建请求体。
+    :param service: FastAPI 注入的运行业务服务。
+    :return: 运行公开投影。
+    """
+
     return service.create(
         str(conversation_id),
         content=payload.content,
@@ -49,6 +57,13 @@ def get_run(
     run_id: UUID,
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> dict[str, object]:
+    """读取运行的最新公开投影。
+
+    :param run_id: URL 路径中的运行 UUID。
+    :param service: FastAPI 注入的运行业务服务。
+    :return: 对账后的运行公开投影。
+    """
+
     return service.get(str(run_id))
 
 
@@ -61,6 +76,13 @@ def cancel_run(
     run_id: UUID,
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> dict[str, object]:
+    """请求取消活动运行。
+
+    :param run_id: URL 路径中的运行 UUID。
+    :param service: FastAPI 注入的运行业务服务。
+    :return: 取消请求后的运行投影。
+    """
+
     return service.cancel(str(run_id))
 
 
@@ -74,10 +96,25 @@ def resolve_approval(
     payload: ApprovalDecisionRequest,
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> dict[str, object]:
+    """处理运行中的待审批工具操作。
+
+    :param run_id: URL 路径中的运行 UUID。
+    :param approval_id: URL 路径中的审批 UUID。
+    :param payload: 已校验的同意或拒绝决定。
+    :param service: FastAPI 注入的运行业务服务。
+    :return: 审批决定接受确认。
+    """
+
     return service.resolve_approval(str(run_id), str(approval_id), payload.decision)
 
 
 def _sse_frame(event: RunEventRecord) -> str:
+    """把持久化事件编码为一个完整 SSE 帧。
+
+    :param event: 已白名单化的持久化运行事件。
+    :return: 包含 id、event 和 JSON data 行的 SSE 文本。
+    """
+
     envelope = {
         "seq": event.seq,
         "event": event.event,
@@ -96,7 +133,16 @@ async def stream_events(
     last_event_id: str | None = Header(default=None, alias="Last-Event-ID"),
     service: ConversationRunService = Depends(get_conversation_run_service),
 ) -> StreamingResponse:
-    """从客户端已确认的位置开始，持续输出可恢复的运行事件流。"""
+    """从客户端已确认的位置开始，持续输出可恢复的运行事件流。
+
+    :param run_id: URL 路径中的运行 UUID。
+    :param request: 当前 FastAPI 请求，用于检测客户端断开。
+    :param after_seq: 查询参数提供的断点续传序号。
+    :param last_event_id: 浏览器通过请求头提供的最后已接收事件 ID。
+    :param service: FastAPI 注入的运行业务服务。
+    :return: ``text/event-stream`` 流式响应。
+    :raises ApiError: Last-Event-ID 不是非负整数。
+    """
 
     # 第一步：确认运行存在，并合并查询参数与 Last-Event-ID 两种续传游标。
     run_id_value = str(run_id)
@@ -116,6 +162,11 @@ async def stream_events(
         sequence = max(sequence, header_sequence)
 
     async def generate() -> AsyncIterator[str]:
+        """按游标持续产出数据库事件，并用内存通知降低轮询延迟。
+
+        :return: 异步产生的 SSE 帧序列。
+        """
+
         # 第二步：优先读取数据库中的持久化事件，保证重连后不依赖内存缓冲区。
         current = sequence
         terminal_observed = False

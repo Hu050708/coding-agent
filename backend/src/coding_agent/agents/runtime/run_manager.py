@@ -39,6 +39,8 @@ from coding_agent.agents.runtime.event_buffer import EventBuffer, RunEvent, utc_
 
 
 class RunStatus(str, Enum):
+    """进程内 Agent 运行的生命周期状态。"""
+
     STARTING = "starting"
     RUNNING = "running"
     WAITING_APPROVAL = "waiting_approval"
@@ -60,7 +62,16 @@ TERMINAL_STATUSES = frozenset(
 
 
 class RunManagerError(RuntimeError):
+    """运行生命周期操作无法按当前状态完成时抛出。"""
+
     def __init__(self, code: str, message: str, *, status_code: int) -> None:
+        """创建带稳定 HTTP 映射信息的运行管理错误。
+
+        :param code: 机器可读错误码。
+        :param message: 可安全返回客户端的错误说明。
+        :param status_code: API 层应返回的 HTTP 状态码。
+        """
+
         super().__init__(message)
         self.code = code
         self.message = message
@@ -68,12 +79,23 @@ class RunManagerError(RuntimeError):
 
 
 def _utc_text(value: datetime | None) -> str | None:
+    """把可选 UTC 时间转换为以 ``Z`` 结尾的 ISO-8601 文本。
+
+    :param value: 带时区时间或 ``None``。
+    :return: 规范时间文本；空值保持为 ``None``。
+    """
+
     if value is None:
         return None
     return value.isoformat().replace("+00:00", "Z")
 
 
 def _empty_usage() -> dict[str, int]:
+    """创建所有已知 token 计数均为零的新字典。
+
+    :return: 可由单个运行会话独占修改的用量字典。
+    """
+
     return {
         "prompt_tokens": 0,
         "completion_tokens": 0,
@@ -99,11 +121,21 @@ class BufferTrace(TraceEmitter):
         *,
         memory_changed: Callable[[MemorySummary], None] | None = None,
     ) -> None:
+        """创建把内部诊断投影到公开事件缓冲区的接收器。
+
+        :param buffer: 接收公开运行事件的线程安全缓冲区。
+        :param memory_changed: 记忆加载摘要变化时同步更新会话的可选回调。
+        """
+
         self.buffer = buffer
         self.memory_changed = memory_changed
 
     def emit(self, event: str, /, **fields: Any) -> None:
-        """把内部诊断事件映射为公开事件，并专门规范化记忆摘要。"""
+        """把内部诊断事件映射为公开事件，并专门规范化记忆摘要。
+
+        :param event: 内部诊断事件名称。
+        :param fields: 已通过核心白名单的事件字段。
+        """
 
         # 第一步：只接受映射表中的安全事件名，未知事件直接忽略。
         public_name = self._EVENT_MAP.get(event)
@@ -152,31 +184,57 @@ class BufferTrace(TraceEmitter):
 
 @dataclass(slots=True)
 class RunSession:
+    """一个进程内运行的可变线程安全生命周期状态。"""
+
+    # 与持久化记录和客户端 URL 一致的运行标识。
     run_id: str
+    # 已通过白名单策略校验的规范工作区路径。
     workspace: Path
+    # 当前运行专属的公开事件缓冲区。
     buffer: EventBuffer
+    # 运行创建时冻结的权限模式。
     permission_mode: PermissionMode = PermissionMode.AGENT
+    # 运行终止后由外层持久化并返回是否完成对账的回调。
     on_finished: Callable[[dict[str, Any]], bool | None] | None = field(
         default=None, repr=False
     )
+    # 协作式取消信号，供 Agent、命令和审批等待共同查询。
     cancel_event: threading.Event = field(default_factory=threading.Event)
+    # 当前运行生命周期状态。
     status: RunStatus = RunStatus.STARTING
+    # 会话进入管理器的 UTC 时间。
     created_at: datetime = field(default_factory=utc_now)
+    # 后台工作线程真正开始执行的 UTC 时间。
     started_at: datetime | None = None
+    # 运行进入终态的 UTC 时间。
     finished_at: datetime | None = None
+    # 模型正常完成后允许展示给用户的最终回答。
     final_content: str | None = None
+    # 机器可读终止原因。
     reason: str | None = None
+    # 运行器未能返回正常结果时的安全错误对象。
     error: dict[str, str] | None = None
+    # 实际模型请求次数。
     model_calls: int = 0
+    # 实际处理的工具调用次数。
     tool_calls: int = 0
+    # 累计 Token 用量安全副本。
     usage: dict[str, int] = field(default_factory=_empty_usage)
+    # 运行墙钟耗时，单位为秒。
     duration_seconds: float | None = None
+    # 工作区记忆加载状态摘要。
     memory: MemorySummary = field(default_factory=lambda: MemorySummary(status="pending"))
+    # 当前正在等待的审批；没有审批时为空。
     pending_approval: PendingApproval | None = None
+    # 同步工具线程与 HTTP 审批接口之间的桥接器。
     approval_broker: ApprovalBroker | None = None
+    # 在线程池中执行本会话的 Future。
     future: Future[None] | None = None
+    # ``run.finished`` 是否已经进入事件缓冲区。
     final_event_published: bool = False
+    # 外层持久化终态是否已经完成对账。
     durable_finalized: bool = True
+    # 保护本会话全部可变字段的一致性锁。
     lock: threading.RLock = field(default_factory=threading.RLock, repr=False)
 
     def summary(self) -> dict[str, Any]:
@@ -207,10 +265,20 @@ class RunSession:
 
     @property
     def terminal(self) -> bool:
+        """判断会话当前是否已经进入任一终态。
+
+        :return: 状态属于 ``TERMINAL_STATUSES`` 时为 True。
+        """
+
         with self.lock:
             return self.status in TERMINAL_STATUSES
 
     def mark_running(self) -> bool:
+        """在未收到取消信号时将会话标为运行中。
+
+        :return: 成功进入运行状态时为 True，已请求取消时为 False。
+        """
+
         with self.lock:
             if self.cancel_event.is_set():
                 return False
@@ -219,6 +287,11 @@ class RunSession:
             return True
 
     def set_pending(self, pending: PendingApproval | None) -> None:
+        """更新待审批快照并同步调整运行状态。
+
+        :param pending: 新审批快照；``None`` 表示审批等待已结束。
+        """
+
         with self.lock:
             self.pending_approval = pending
             if self.status in TERMINAL_STATUSES or self.status is RunStatus.CANCELLING:
@@ -226,25 +299,44 @@ class RunSession:
             self.status = RunStatus.WAITING_APPROVAL if pending is not None else RunStatus.RUNNING
 
     def set_memory(self, memory: MemorySummary) -> None:
+        """更新记忆摘要，但保持显式禁用状态不被覆盖。
+
+        :param memory: 运行器报告的最新记忆加载摘要。
+        """
+
         with self.lock:
             if self.memory.status != "disabled":
                 self.memory = memory
 
     def mark_final_event_published(self) -> None:
+        """记录最终事件已经进入实时缓冲区。"""
+
         with self.lock:
             self.final_event_published = True
 
     def mark_durable_finalized(self) -> None:
+        """记录外层持久化终态已经完成对账。"""
+
         with self.lock:
             self.durable_finalized = True
 
     @property
     def stream_complete(self) -> bool:
+        """判断运行终态及最终流事件是否都已就绪。
+
+        :return: 已进入终态且最终事件已发布时为 True。
+        """
+
         with self.lock:
             return self.status in TERMINAL_STATUSES and self.final_event_published
 
     @property
     def evictable(self) -> bool:
+        """判断会话能否从有限保留缓存安全淘汰。
+
+        :return: 终态、最终事件发布和持久化对账均完成时为 True。
+        """
+
         with self.lock:
             return (
                 self.status in TERMINAL_STATUSES
@@ -253,6 +345,11 @@ class RunSession:
             )
 
     def request_cancel(self) -> bool:
+        """幂等设置取消信号并唤醒可能的审批等待。
+
+        :return: 本次接受了活动运行取消请求时为 True；已终态时为 False。
+        """
+
         with self.lock:
             if self.status in TERMINAL_STATUSES:
                 return False
@@ -264,7 +361,10 @@ class RunSession:
         return True
 
     def finish(self, outcome: RunOutcome) -> None:
-        """把执行器结果归并为 Web 运行终态。"""
+        """把执行器结果归并为 Web 运行终态。
+
+        :param outcome: 同步 Agent 运行器返回的安全结果摘要。
+        """
 
         with self.lock:
             # 第一步：取消信号优先，其次按执行器状态选择最终状态和正文。
@@ -296,7 +396,11 @@ class RunSession:
             self.finished_at = utc_now()
 
     def fail(self, code: str, message: str) -> None:
-        """记录运行器未能返回正常 RunOutcome 时的失败终态。"""
+        """记录运行器未能返回正常 RunOutcome 时的失败终态。
+
+        :param code: 机器可读失败原因；取消已发生时会被取消语义覆盖。
+        :param message: 可持久化并展示的安全错误文本。
+        """
 
         with self.lock:
             # 第一步：如果用户已经请求取消，则取消语义覆盖内部错误。
@@ -329,7 +433,16 @@ class RunManager:
         approval_timeout_seconds: float = 480.0,
         run_deadline_seconds: float | None = None,
     ) -> None:
-        """初始化进程内运行索引、工作区占位和有界线程池。"""
+        """初始化进程内运行索引、工作区占位和有界线程池。
+
+        :param runner: 实际装配并同步执行 Agent 的运行器。
+        :param workspace_policy: 校验用户选择目录的服务端白名单策略。
+        :param max_active_runs: 不同工作区可同时执行的最大运行数量。
+        :param max_retained_runs: 进程内最多保留的活动和终态会话总数。
+        :param event_buffer_size: 每个运行的内存事件缓冲区容量。
+        :param approval_timeout_seconds: 单次工具审批允许等待的最长秒数。
+        :param run_deadline_seconds: 可选的审批代理级运行总截止时间。
+        """
 
         self.runner = runner
         self.workspace_policy = workspace_policy
@@ -350,18 +463,40 @@ class RunManager:
 
     @property
     def ready(self) -> bool:
+        """判断底层运行器能否接受新任务。
+
+        :return: 模型供应商配置就绪时为 True。
+        """
+
         return bool(self.runner.ready)
 
     @property
     def model(self) -> str:
+        """返回底层运行器配置的模型名称。
+
+        :return: 当前模型 ID。
+        """
+
         return self.runner.model
 
     @property
     def active_runs(self) -> int:
+        """取得当前占用工作区的活动运行数。
+
+        :return: 活动工作区占位映射的条目数量。
+        """
+
         with self._lock:
             return len(self._active_workspaces)
 
     def validate_workspace(self, value: str) -> Path:
+        """校验并规范化用户选择的工作区。
+
+        :param value: 用户提交的工作区绝对路径文本。
+        :return: 白名单根目录内的现有规范目录。
+        :raises RunManagerError: 工作区不满足服务端白名单策略。
+        """
+
         try:
             return self.workspace_policy.validate(value)
         except WorkspacePolicyError as exc:
@@ -380,7 +515,20 @@ class RunManager:
         on_event: Callable[[RunEvent], None] | None = None,
         on_finished: Callable[[dict[str, Any]], bool | None] | None = None,
     ) -> dict[str, Any]:
-        """校验请求、原子预留工作区，并把运行提交到后台线程池。"""
+        """校验请求、原子预留工作区，并把运行提交到后台线程池。
+
+        :param workspace: 已选择工作区的绝对路径文本。
+        :param task: 当前用户任务正文。
+        :param use_memory: 是否允许本次运行使用工作区记忆。
+        :param permission_mode: 本次运行冻结的权限模式。
+        :param prior_messages: 创建事务中冻结的可见会话历史。
+        :param memory_snapshot: 创建事务中冻结的记忆；``None`` 表示旧调用方未预加载。
+        :param run_id: 可选外部运行标识；省略时由管理器生成。
+        :param on_event: 每次发布安全事件时调用的可选持久化回调。
+        :param on_finished: 运行终止后执行持久化对账的可选回调。
+        :return: 新建运行的线程安全会话摘要。
+        :raises RunManagerError: 输入、容量、工作区占用或服务状态不允许创建运行。
+        """
 
         # 第一步：在获取全局锁前完成纯输入校验和工作区规范化。
         if not isinstance(task, str) or not task.strip():
@@ -512,23 +660,63 @@ class RunManager:
         return session.summary()
 
     def get(self, run_id: str) -> dict[str, Any]:
+        """取得一个进程内运行的当前摘要。
+
+        :param run_id: 运行唯一标识。
+        :return: 在线程锁内生成的安全状态字典。
+        :raises RunManagerError: 运行不存在。
+        """
+
         return self._session(run_id).summary()
 
     def get_buffer(self, run_id: str) -> EventBuffer:
+        """取得运行专属的实时事件缓冲区。
+
+        :param run_id: 运行唯一标识。
+        :return: 对应 ``EventBuffer``。
+        :raises RunManagerError: 运行不存在。
+        """
+
         return self._session(run_id).buffer
 
     def is_terminal(self, run_id: str) -> bool:
+        """判断运行是否已经进入任一终态。
+
+        :param run_id: 运行唯一标识。
+        :return: 运行已完成、失败、取消或预算耗尽时为 ``True``。
+        """
+
         return self._session(run_id).terminal
 
     def is_stream_complete(self, run_id: str) -> bool:
+        """判断运行终态及最终事件是否都已就绪。
+
+        :param run_id: 运行唯一标识。
+        :return: SSE 可以安全结束时返回 ``True``。
+        """
+
         return self._session(run_id).stream_complete
 
     def cancel(self, run_id: str) -> dict[str, Any]:
+        """为运行设置协作式取消信号并返回最新摘要。
+
+        :param run_id: 运行唯一标识。
+        :return: 发出取消请求后的会话摘要。
+        """
+
         session = self._session(run_id)
         session.request_cancel()
         return session.summary()
 
     def resolve_approval(self, run_id: str, approval_id: str, decision: str) -> None:
+        """把 HTTP 审批决定提交给指定运行的等待线程。
+
+        :param run_id: 审批所属运行标识。
+        :param approval_id: 当前待审批请求标识。
+        :param decision: ``approve`` 或 ``reject``。
+        :raises RunManagerError: 运行、审批或决定状态不合法。
+        """
+
         session = self._session(run_id)
         broker = session.approval_broker
         if broker is None:
@@ -542,7 +730,12 @@ class RunManager:
 
     @contextmanager
     def reserve_memory_mutation(self, workspace: str) -> Iterator[Path]:
-        """执行一次变更期间，原子排除同工作区运行。"""
+        """执行一次变更期间，原子排除同工作区运行。
+
+        :param workspace: 即将修改记忆的工作区绝对路径文本。
+        :return: 上下文管理器迭代出的规范工作区路径。
+        :raises RunManagerError: 工作区有活动运行、其他记忆变更或服务正在关闭。
+        """
 
         # 第一步：规范化工作区，并在管理器锁内检查运行和其他记忆变更冲突。
         resolved_workspace = self.validate_workspace(workspace)
@@ -573,7 +766,12 @@ class RunManager:
                 self._memory_mutations.discard(key)
 
     def validate_memory_source(self, run_id: str, workspace: str) -> None:
-        """确认可选运行来源，且不暴露保留的运行内容。"""
+        """确认可选运行来源，且不暴露保留的运行内容。
+
+        :param run_id: 用户希望作为记忆来源的已完成运行标识。
+        :param workspace: 新记忆所属工作区路径。
+        :raises RunManagerError: 来源不存在、跨工作区或未成功完成。
+        """
 
         # 第一步：取得来源会话快照，并把不存在统一映射为记忆领域错误。
         resolved_workspace = self.validate_workspace(workspace)
@@ -602,13 +800,22 @@ class RunManager:
             )
 
     def list(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """按从新到旧列出最近的进程内运行摘要。
+
+        :param limit: 希望返回的数量，实际会限制在 1 到 100。
+        :return: 最新运行在前的安全摘要列表。
+        """
+
         safe_limit = max(1, min(int(limit), 100))
         with self._lock:
             sessions = tuple(self._sessions.values())[-safe_limit:]
         return [session.summary() for session in reversed(sessions)]
 
     def shutdown(self, *, wait: bool = False) -> None:
-        """停止接收新运行，取消活动会话并关闭线程池。"""
+        """停止接收新运行，取消活动会话并关闭线程池。
+
+        :param wait: 是否阻塞等待当前工作线程退出。
+        """
 
         # 第一步：原子切换关闭状态并复制活动运行 ID，避免持锁执行回调。
         with self._lock:
@@ -633,7 +840,15 @@ class RunManager:
         prior_messages: tuple[VisibleMessage, ...],
         memory_snapshot: tuple[MemoryReference, ...] | None,
     ) -> None:
-        """在线程池中执行一个会话，并保证任何退出路径都完成资源收尾。"""
+        """在线程池中执行一个会话，并保证任何退出路径都完成资源收尾。
+
+        :param session: 已登记且占用工作区的运行会话。
+        :param task: 当前用户任务正文。
+        :param use_memory: 是否启用工作区记忆。
+        :param workspace_key: 用于释放活动工作区占位的规范路径键。
+        :param prior_messages: 创建事务冻结的可见历史消息。
+        :param memory_snapshot: 创建事务冻结的可选记忆快照。
+        """
 
         # 第一步：把会话切换为运行态，并发布可供持久化层投影的启动事件。
         try:
@@ -687,11 +902,20 @@ class RunManager:
                     pass
 
     def mark_durable_finalized(self, run_id: str) -> None:
-        """允许已对账的终态会话参与保留淘汰。"""
+        """允许已对账的终态会话参与保留淘汰。
+
+        :param run_id: 已完成外层持久化对账的运行标识。
+        :raises RunManagerError: 运行不存在。
+        """
 
         self._session(run_id).mark_durable_finalized()
 
     def _publish_finished(self, session: RunSession) -> None:
+        """发布一次统一最终事件并标记实时流可以结束。
+
+        :param session: 已经进入终态的运行会话。
+        """
+
         summary = session.summary()
         session.buffer.publish(
             "run.finished",
@@ -708,6 +932,13 @@ class RunManager:
         session.mark_final_event_published()
 
     def _session(self, run_id: str) -> RunSession:
+        """从进程内索引取得运行会话。
+
+        :param run_id: 运行唯一标识。
+        :return: 对应可变 ``RunSession``。
+        :raises RunManagerError: 标识为空或运行不存在。
+        """
+
         if not isinstance(run_id, str) or not run_id:
             raise RunManagerError("run_not_found", "Run was not found.", status_code=404)
         with self._lock:
@@ -718,9 +949,17 @@ class RunManager:
 
     @staticmethod
     def _workspace_key(workspace: Path) -> str:
+        """生成工作区并发占位使用的平台路径键。
+
+        :param workspace: 已规范化工作区路径。
+        :return: 绝对化并应用平台大小写规则的字符串。
+        """
+
         return os.path.normcase(os.path.abspath(os.fspath(workspace)))
 
     def _evict_terminal_locked(self) -> None:
+        """在管理器锁内淘汰最旧且已完全收尾的会话。"""
+
         while len(self._sessions) >= self.max_retained_runs:
             evicted = False
             for run_id, session in tuple(self._sessions.items()):

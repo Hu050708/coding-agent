@@ -22,7 +22,13 @@ def health(
     settings: AppSettings = Depends(get_settings),
     database: Database = Depends(get_database),
 ) -> dict[str, object]:
-    """汇总 PostgreSQL 与模型供应商的就绪状态。"""
+    """汇总 PostgreSQL 与模型供应商的就绪状态。
+
+    :param manager: FastAPI 注入的运行管理器，用于检查供应商配置。
+    :param settings: FastAPI 注入的应用配置。
+    :param database: FastAPI 注入的数据库封装。
+    :return: 总体状态及各关键依赖的就绪信息。
+    """
 
     # 第一步：主动执行轻量数据库查询，区分配置存在和连接真正可用。
     database_state = "ready"

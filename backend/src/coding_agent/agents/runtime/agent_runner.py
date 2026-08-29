@@ -39,17 +39,27 @@ MEMORY_AWARE_SYSTEM_PROMPT = (
 
 @dataclass(frozen=True, slots=True)
 class RunSpec:
+    """Web 编排层提交给同步 Agent 运行器的不可变输入。"""
+
+    # 与数据库运行记录一致的唯一标识。
     run_id: str
+    # 已通过服务端白名单校验的工作区目录。
     workspace: Path
+    # 当前用户任务正文。
     task: str
+    # 本次运行是否允许加载工作区记忆。
     use_memory: bool = True
+    # 本次运行冻结的权限模式。
     permission_mode: PermissionMode = PermissionMode.AGENT
+    # 创建运行事务中冻结的用户可见会话历史。
     prior_messages: tuple[VisibleMessage, ...] = ()
     # None 是兼容旧调用方的“未预加载”信号；空元组则表示数据库已冻结空快照，
     # 后者不能触发再次读取。
     memory_snapshot: tuple[MemoryReference, ...] | None = None
 
     def __post_init__(self) -> None:
+        """规范权限枚举并校验历史、记忆快照均为不可变类型。"""
+
         object.__setattr__(self, "permission_mode", PermissionMode.parse(self.permission_mode))
         if not isinstance(self.prior_messages, tuple) or not all(
             isinstance(message, VisibleMessage) for message in self.prior_messages
@@ -66,24 +76,48 @@ class RunSpec:
 
 @dataclass(frozen=True, slots=True)
 class RunOutcome:
+    """同步 Agent 结果投影到 Web 层后的安全摘要。"""
+
+    # 核心 Agent 终止状态文本。
     status: str
+    # 机器可读终止原因。
     reason: str
+    # 可以持久化并展示给用户的最终回答。
     final_content: str | None
+    # 实际模型请求次数。
     model_calls: int
+    # 实际处理的工具调用次数。
     tool_calls: int
+    # 可安全持久化的 Token 用量字典。
     usage: dict[str, int]
+    # 整次运行墙钟耗时，单位为秒。
     duration_seconds: float
+    # 工作区记忆加载结果摘要。
     memory: MemorySummary = field(
         default_factory=lambda: MemorySummary(status="unavailable")
     )
 
 
 class AgentRunnerProtocol(Protocol):
-    @property
-    def ready(self) -> bool: ...
+    """运行管理器依赖的同步 Agent 执行边界。"""
 
     @property
-    def model(self) -> str: ...
+    def ready(self) -> bool:
+        """表示模型供应商配置是否足以启动运行。
+
+        :return: 可以接受新运行时为 True。
+        """
+
+        ...
+
+    @property
+    def model(self) -> str:
+        """返回运行器将使用的模型名称。
+
+        :return: 配置中的供应商模型 ID。
+        """
+
+        ...
 
     def run(
         self,
@@ -92,10 +126,22 @@ class AgentRunnerProtocol(Protocol):
         cancel_event: threading.Event,
         confirm_command: Callable[[ToolApprovalRequest], bool],
         trace: TraceEmitter,
-    ) -> RunOutcome: ...
+    ) -> RunOutcome:
+        """同步执行一条 Web 运行规格。
+
+        :param spec: 工作区、任务、权限和冻结上下文组成的运行规格。
+        :param cancel_event: 供 Agent 与命令工具查询的取消事件。
+        :param confirm_command: 把同步工具审批桥接到 HTTP 决定的回调。
+        :param trace: 接收安全运行诊断事件的输出端。
+        :return: 不含隐藏推理和完整工具输出的 Web 安全结果。
+        """
+
+        ...
 
 
 class RunnerNotReadyError(RuntimeError):
+    """模型供应商配置不足、运行器尚不可用时抛出。"""
+
     pass
 
 
@@ -103,9 +149,20 @@ class CompositeTrace:
     """尽力分发诊断事件，且绝不能改变智能体行为。"""
 
     def __init__(self, *sinks: TraceEmitter) -> None:
+        """创建向多个接收器尽力分发事件的组合器。
+
+        :param sinks: 一个或多个诊断事件接收器。
+        """
+
         self._sinks = tuple(sinks)
 
     def emit(self, event: str, /, **fields: Any) -> None:
+        """把同一事件依次发送给全部接收器并抑制单个故障。
+
+        :param event: 诊断事件名称。
+        :param fields: 事件携带的结构化安全字段。
+        """
+
         for sink in self._sinks:
             try:
                 sink.emit(event, **fields)
@@ -123,16 +180,33 @@ class AgentRunner:
         memory_service: MemoryService | None = None,
         context_builder: AgentContextBuilder | None = None,
     ) -> None:
+        """保存 Web 配置及可选记忆、上下文服务。
+
+        :param settings: 模型、预算、跟踪目录等后端应用配置。
+        :param memory_service: 兼容旧调用路径的可选记忆查询服务。
+        :param context_builder: 可注入的上下文校验与裁剪器。
+        """
+
         self.settings = settings
         self.memory_service = memory_service
         self.context_builder = context_builder or AgentContextBuilder()
 
     @property
     def ready(self) -> bool:
+        """判断应用是否配置了模型 API 密钥。
+
+        :return: API 密钥非空时为 True。
+        """
+
         return self.settings.api_key_configured
 
     @property
     def model(self) -> str:
+        """返回当前配置的模型名称。
+
+        :return: 将传给供应商适配器的模型 ID。
+        """
+
         return self.settings.model
 
     def run(
@@ -143,7 +217,15 @@ class AgentRunner:
         confirm_command: Callable[[ToolApprovalRequest], bool],
         trace: TraceEmitter,
     ) -> RunOutcome:
-        """装配一次隔离的智能体运行，并把核心结果转换为 Web 层运行结果。"""
+        """装配一次隔离的智能体运行，并把核心结果转换为 Web 层运行结果。
+
+        :param spec: 当前运行的不可变工作区、任务和上下文规格。
+        :param cancel_event: 在运行期间传播用户取消的线程事件。
+        :param confirm_command: 工具需要确认时阻塞等待决定的回调。
+        :param trace: 接收公开安全诊断事件的运行级跟踪器。
+        :return: 可由 Web 层持久化的安全运行结果。
+        :raises RunnerNotReadyError: 服务端没有配置模型 API 密钥。
+        """
 
         # 第一步：校验运行参数和工作区，再为本次运行创建独立工具注册表。
         if not self.ready:
@@ -223,6 +305,7 @@ class AgentRunner:
         # 第四步：构建上下文并同步运行智能体，最后无条件关闭供应商客户端。
         try:
             context = self.context_builder.build(
+                config=config,
                 prior_messages=spec.prior_messages,
                 memory_entries=memory_references,
             )
@@ -256,7 +339,12 @@ class AgentRunner:
 
 
 def _safe_outcome(result: RunResult, *, memory: MemorySummary) -> RunOutcome:
-    """在 Web 层保留数据前丢弃消息、推理和工具输出。"""
+    """在 Web 层保留数据前丢弃消息、推理和工具输出。
+
+    :param result: 核心 Agent 返回的完整内存运行结果。
+    :param memory: 本次运行实际加载的记忆摘要。
+    :return: 只含允许持久化字段的 ``RunOutcome``。
+    """
 
     status = result.status.value if hasattr(result.status, "value") else str(result.status)
     reason = result.reason.value if hasattr(result.reason, "value") else str(result.reason)

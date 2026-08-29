@@ -15,7 +15,15 @@ from coding_agent.agents.security import ToolApprovalRequest
 
 
 class ApprovalBrokerError(RuntimeError):
+    """审批决定与当前等待状态冲突时抛出。"""
+
     def __init__(self, code: str, message: str) -> None:
+        """创建可映射到 HTTP 冲突响应的审批错误。
+
+        :param code: 稳定机器可读错误码。
+        :param message: 可安全展示给用户的错误说明。
+        """
+
         super().__init__(message)
         self.code = code
         self.message = message
@@ -23,16 +31,31 @@ class ApprovalBrokerError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class PendingApproval:
+    """一次正在等待用户决定的不可变审批快照。"""
+
+    # 审批请求唯一标识。
     approval_id: str
+    # 发起审批的工具名称。
     tool_name: str
+    # 面向用户的安全操作摘要。
     action_summary: str
+    # 命令工具的原始参数；非命令工具通常为空。
     argv: tuple[str, ...]
+    # 命令执行目录展示值。
     cwd: str
+    # 请求审批的策略原因。
     reason: str
+    # 审批创建 UTC 时间。
     created_at: datetime
+    # 审批自动过期 UTC 时间。
     expires_at: datetime
 
     def as_dict(self) -> dict[str, Any]:
+        """把待审批快照转换为可发布的安全字典。
+
+        :return: 含规范 UTC 时间文本和 argv 列表的独立对象。
+        """
+
         return {
             "approval_id": self.approval_id,
             "tool_name": self.tool_name,
@@ -59,7 +82,17 @@ class ApprovalBroker:
         pending_changed: Callable[[PendingApproval | None], Any],
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
-        """保存运行级回调，并建立审批等待所需的条件变量。"""
+        """保存运行级回调，并建立审批等待所需的条件变量。
+
+        :param run_id: 审批所属运行的唯一标识。
+        :param cancel_event: 运行取消时由外部设置的线程事件。
+        :param timeout_seconds: 单次审批允许等待的最长秒数。
+        :param run_deadline_seconds: 从创建代理起计算的可选运行总截止秒数。
+        :param publish: 向运行事件缓冲区发布审批事件的回调。
+        :param pending_changed: 同步更新会话待审批快照的回调。
+        :param clock: 提供单调时间的函数，主要用于测试注入。
+        :raises ValueError: 任一超时不是有限正数。
+        """
 
         self.run_id = run_id
         self.cancel_event = cancel_event
@@ -81,7 +114,11 @@ class ApprovalBroker:
         self._decision: str | None = None
 
     def confirm(self, request: ToolApprovalRequest) -> bool:
-        """发布审批请求并阻塞等待决定、取消、超时或运行截止时间。"""
+        """发布审批请求并阻塞等待决定、取消、超时或运行截止时间。
+
+        :param request: 工具层生成的用户可见审批请求。
+        :return: 用户在有效期内批准时返回 ``True``，其他终态返回 ``False``。
+        """
 
         # 第一步：规范化审批 ID，并确保同一运行同一时刻只有一个等待者。
         effective_timeout = self.timeout_seconds
@@ -150,7 +187,12 @@ class ApprovalBroker:
         return approved
 
     def resolve(self, approval_id: str, decision: str) -> None:
-        """提交一次审批决定，并唤醒正在等待的工具线程。"""
+        """提交一次审批决定，并唤醒正在等待的工具线程。
+
+        :param approval_id: HTTP 调用方正在处理的审批请求标识。
+        :param decision: 只允许 ``approve`` 或 ``reject``。
+        :raises ApprovalBrokerError: 决定非法、审批不存在、过期、重复或运行取消中。
+        """
 
         # 第一步：校验决定值和审批 ID，拒绝过期或重复提交。
         if decision not in {"approve", "reject"}:
@@ -170,10 +212,17 @@ class ApprovalBroker:
             self._condition.notify_all()
 
     def pending(self) -> PendingApproval | None:
+        """在线程锁保护下读取当前待审批快照。
+
+        :return: 当前审批；没有等待者时为 None。
+        """
+
         with self._condition:
             return self._pending
 
     def cancel(self) -> None:
+        """唤醒审批等待线程，使其重新检查运行取消事件。"""
+
         with self._condition:
             self._condition.notify_all()
 

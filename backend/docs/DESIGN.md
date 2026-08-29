@@ -121,7 +121,7 @@ backend/src/coding_agent/
   repository/               # 仓储、DTO、事务门面和安全事件
   database/                 # 连接、迁移和启动恢复
   agents/
-    config.py               # 单次 Agent 运行的预算和重试配置
+    config.py               # 单次 Agent 运行的预算、上下文容量和重试配置
     contracts.py            # 值对象和依赖端口
     context.py              # 有界可见历史与不可变记忆上下文
     progress.py             # 完全重复工具交换的有界哈希检测

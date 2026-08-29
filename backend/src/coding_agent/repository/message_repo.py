@@ -44,6 +44,11 @@ class MessageRepository:
     """维护会话内严格递增的消息序号和消息历史。"""
 
     def __init__(self, session: Session) -> None:
+        """绑定当前事务使用的 ORM 会话。
+
+        :param session: 由上层负责事务边界的 SQLAlchemy 会话。
+        """
+
         self.session = session
 
     def append(
@@ -54,7 +59,15 @@ class MessageRepository:
         content: str,
         run_id: UUIDLike | None = None,
     ) -> Message:
-        """原子地分配会话消息序号并追加一条消息。"""
+        """原子地分配会话消息序号并追加一条消息。
+
+        :param conversation_id: 消息所属会话 ID。
+        :param role: 用户或助手消息角色。
+        :param content: 非空的用户可见正文。
+        :param run_id: 可选的关联运行 ID。
+        :return: 已分配序号并 flush 的消息实体。
+        :raises PersistenceNotFoundError: 会话不存在或已删除。
+        """
 
         # 第一步：锁定会话行，确保并发追加消息时不会取得相同序号。
         conversation = self.session.scalar(
@@ -89,6 +102,15 @@ class MessageRepository:
         after_seq: int = 0,
         limit: int = 500,
     ) -> list[Message]:
+        """按正序分页读取会话消息。
+
+        :param conversation_id: 会话 ID。
+        :param after_seq: 仅返回序号严格大于该游标的消息。
+        :param limit: 本页期望条数，实际限制在 1 到 2000。
+        :return: 按序号升序排列的活动消息列表。
+        :raises ValueError: 游标不是非负整数。
+        """
+
         if isinstance(after_seq, bool) or not isinstance(after_seq, int) or after_seq < 0:
             raise ValueError("after_seq must be a non-negative integer")
         safe_limit = max(1, min(int(limit), 2_000))
@@ -111,7 +133,14 @@ class MessageRepository:
         limit: int = 100,
         before_seq: int | None = None,
     ) -> list[Message]:
-        """读取指定位置之前最近的消息，并按正常对话顺序返回。"""
+        """读取指定位置之前最近的消息，并按正常对话顺序返回。
+
+        :param conversation_id: 会话 ID。
+        :param limit: 最多返回的最近消息数量，实际不超过 500。
+        :param before_seq: 可选上界，仅返回序号小于该值的消息。
+        :return: 从旧到新排列的最近消息列表。
+        :raises ValueError: ``before_seq`` 不是正整数。
+        """
 
         # 第一步：构造会话范围和可选游标条件。
         safe_limit = max(1, min(int(limit), 500))
@@ -140,10 +169,15 @@ class MessageRepository:
         return list(reversed(newest_first))
 
     def soft_delete_conversation(self, conversation_id: UUIDLike) -> int:
+        """软删除当前分页上限内的全部会话消息。
+
+        :param conversation_id: 目标会话 ID。
+        :return: 实际标记删除的消息数量。
+        """
+
         now = utc_now()
         items = self.list(conversation_id, after_seq=0, limit=2_000)
         for item in items:
             item.deleted_at = now
         self.session.flush()
         return len(items)
-

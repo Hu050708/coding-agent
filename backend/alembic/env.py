@@ -19,6 +19,12 @@ target_metadata = Base.metadata
 
 
 def _database_url() -> str:
+    """从进程内迁移属性或环境变量取得数据库 URL。
+
+    :return: 去除首尾空白的非空 SQLAlchemy 数据库 URL。
+    :raises RuntimeError: 两个配置来源均未提供 URL。
+    """
+
     value = config.attributes.get("database_url")
     if not value:
         value = os.environ.get("CODING_AGENT_DATABASE_URL", "")

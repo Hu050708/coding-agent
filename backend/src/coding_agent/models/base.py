@@ -46,15 +46,18 @@ SAFE_JSON = JSON().with_variant(JSONB(), "postgresql")
 class Base(DeclarativeBase):
     """所有 SQLAlchemy 声明式模型的公共基类。"""
 
+    # 为约束和索引提供跨数据库一致、便于迁移审查的自动命名规则。
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
 class TimestampMixin:
     """为实体提供由数据库维护的创建和更新时间。"""
 
+    # 实体首次插入数据库的时间，由数据库服务器生成。
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    # 实体最近一次更新的时间，由 ORM 更新操作维护。
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
     )
@@ -63,6 +66,7 @@ class TimestampMixin:
 class SoftDeleteMixin:
     """为需要保留审计记录的实体提供软删除时间。"""
 
+    # 软删除发生时间；为 None 表示记录仍然有效。
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 

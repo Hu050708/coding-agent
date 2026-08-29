@@ -97,6 +97,13 @@ _MAX_LIST_ITEMS = 200
 
 
 def _safe_scalar(value: Any) -> str | int | float | bool | None:
+    """将值限制为 JSON 安全标量并截断过长文本。
+
+    :param value: 待写入持久化事件字段的原始值。
+    :return: 允许的 JSON 标量。
+    :raises UnsafeEventError: 值类型不允许或浮点数非有限。
+    """
+
     if value is None or isinstance(value, (str, bool, int)):
         if isinstance(value, str):
             return value[:_MAX_STRING]
@@ -113,6 +120,11 @@ def sanitize_run_event(event: str, data: Mapping[str, Any] | None) -> dict[str, 
 
     未知事件名会被拒绝，而不是乐观持久化；已知事件上的未知字段会被丢弃。
     因此实时流后续新增字段必须显式加入白名单，才能进入持久化存储。
+
+    :param event: 稳定的运行事件类型名称。
+    :param data: 实时事件携带的原始字段映射。
+    :return: 仅包含该事件白名单字段的独立 JSON 对象。
+    :raises UnsafeEventError: 事件未知、负载结构错误或字段值不安全。
     """
 
     # 第一步：验证事件名和顶层负载类型，只复制该事件允许的标量字段。
@@ -165,6 +177,12 @@ def safe_approval_data(
 
     原始 argv、cwd、stdin、环境变量值和工具输出会被主动排除；这些值只能短暂存在于
     实时审批代理中。
+
+    :param tool_name: 待审批工具名称。
+    :param action_summary: 面向用户的操作摘要。
+    :param reason: 需要审批的安全原因。
+    :return: 仅含三项安全展示文本的独立字典。
+    :raises UnsafeEventError: 任一展示字段不是非空文本。
     """
 
     values = {

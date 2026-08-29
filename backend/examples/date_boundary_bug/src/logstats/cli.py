@@ -11,6 +11,11 @@ from .service import summarize_file
 
 
 def build_parser() -> argparse.ArgumentParser:
+    """构建日志统计示例的命令行解析器。
+
+    :return: 支持日志路径和可选起止日期的参数解析器。
+    """
+
     parser = argparse.ArgumentParser(description="汇总带时间戳的 JSONL 日志")
     parser.add_argument("log_file", type=Path, help="JSONL 日志文件路径")
     parser.add_argument("--from", dest="from_date", metavar="YYYY-MM-DD")
@@ -19,6 +24,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """解析参数、汇总日志并输出 JSON。
+
+    :param argv: 可选命令行参数；None 表示读取当前进程参数。
+    :return: 成功时返回 0；参数或数据错误由 argparse 终止进程。
+    """
+
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

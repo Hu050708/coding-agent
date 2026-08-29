@@ -30,13 +30,20 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
 
     __tablename__ = "workspaces"
 
+    # 工作区主键。
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    # 经过安全策略校验和解析的绝对路径。
     canonical_path: Mapped[str] = mapped_column(Text, nullable=False)
+    # 用于跨大小写文件系统比较和唯一约束的规范路径键。
     path_key: Mapped[str] = mapped_column(String(2048), nullable=False)
+    # 用户可见的工作区名称。
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # 工作区归档时间；为 None 表示仍在活动目录中。
     archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # 工作区下的会话 ORM 集合。
     conversations: Mapped[list["Conversation"]] = relationship(back_populates="workspace")
+    # 工作区下的项目记忆 ORM 集合。
     memory_entries: Mapped[list["MemoryEntry"]] = relationship(back_populates="workspace")
 
     __table_args__ = (
@@ -51,5 +58,4 @@ class Workspace(TimestampMixin, SoftDeleteMixin, Base):
         ),
         Index("ix_workspaces_live_updated", "deleted_at", "archived_at", "updated_at"),
     )
-
 

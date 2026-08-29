@@ -7,13 +7,27 @@ from pathlib import Path
 
 
 class WorkspacePolicyError(ValueError):
+    """路径无效或越过服务端允许根目录时抛出。"""
+
     def __init__(self, code: str, message: str) -> None:
+        """创建可由 API 稳定映射的工作区白名单错误。
+
+        :param code: 机器可读错误码。
+        :param message: 可安全展示给用户的错误摘要。
+        """
+
         super().__init__(message)
         self.code = code
         self.message = message
 
 
 def _normalized(path: Path) -> str:
+    """生成用于白名单包含关系比较的绝对平台路径键。
+
+    :param path: 待规范化目录路径。
+    :return: 应用平台大小写规则后的绝对路径字符串。
+    """
+
     return os.path.normcase(os.path.abspath(os.fspath(path)))
 
 
@@ -21,6 +35,12 @@ class WorkspacePolicy:
     """仅允许配置根目录内已经存在的文件夹。"""
 
     def __init__(self, allowed_root: str | os.PathLike[str]) -> None:
+        """加载并校验服务端允许使用的工作区根目录。
+
+        :param allowed_root: 必须已经存在的绝对或可展开目录路径。
+        :raises WorkspacePolicyError: 根目录不存在、不可解析或不是目录。
+        """
+
         try:
             root = Path(allowed_root).expanduser().resolve(strict=True)
         except (OSError, RuntimeError) as exc:
@@ -34,7 +54,12 @@ class WorkspacePolicy:
         self.allowed_root = root
 
     def validate(self, value: str) -> Path:
-        """返回白名单根目录内已存在工作区的规范绝对路径。"""
+        """返回白名单根目录内已存在工作区的规范绝对路径。
+
+        :param value: 用户选择的工作区绝对路径文本。
+        :return: 解析链接后仍位于允许根目录内的现有目录路径。
+        :raises WorkspacePolicyError: 输入格式、存在性、目录类型或白名单范围不合法。
+        """
 
         # 第一步：检查输入形式并要求用户显式提供绝对路径。
         if not isinstance(value, str) or not value.strip():

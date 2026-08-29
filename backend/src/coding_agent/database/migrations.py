@@ -6,15 +6,27 @@ from pathlib import Path
 
 
 class DatabaseMigrationError(RuntimeError):
+    """数据库迁移配置或执行失败时抛出。"""
+
     pass
 
 
 def default_alembic_config_path() -> Path:
+    """定位后端目录中的默认 Alembic 配置文件。
+
+    :return: ``backend/alembic.ini`` 的绝对路径。
+    """
+
     return Path(__file__).resolve().parents[3] / "alembic.ini"
 
 
 def upgrade_database(database_url: str, *, config_path: str | Path | None = None) -> None:
-    """将配置的数据库升级到 ``head``，且不记录其 DSN。"""
+    """将配置的数据库升级到 ``head``，且不记录其 DSN。
+
+    :param database_url: 迁移目标数据库的 SQLAlchemy URL。
+    :param config_path: 自定义 Alembic 配置路径；为 None 时使用后端默认配置。
+    :raises DatabaseMigrationError: URL 为空、配置加载失败或迁移执行失败。
+    """
 
     if not isinstance(database_url, str) or not database_url.strip():
         raise DatabaseMigrationError("database migration URL is required")

@@ -17,22 +17,40 @@ class MemoryRepositoryError(RuntimeError):
 
 
 class MemoryDuplicateError(MemoryRepositoryError):
+    """同一工作区已经存在等价正文时抛出。"""
+
     pass
 
 
 class MemoryCapacityError(MemoryRepositoryError):
+    """工作区记忆数量达到配置上限时抛出。"""
+
     pass
 
 
 class MemoryNotFoundError(MemoryRepositoryError):
+    """目标记忆条目不存在时抛出。"""
+
     pass
 
 
 def _utc_now_text() -> str:
+    """生成带微秒精度的 UTC ISO 8601 时间文本。
+
+    :return: 以 ``Z`` 结尾、适合按时间排序的 UTC 字符串。
+    """
+
     return datetime.now(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _parse_datetime(value: str) -> datetime:
+    """把仓储中的 UTC 时间文本解析为带时区时间对象。
+
+    :param value: 以 ``Z`` 或显式偏移结尾的 ISO 8601 时间文本。
+    :return: 解析后的 ``datetime`` 对象。
+    :raises ValueError: 输入不是合法时间文本。
+    """
+
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
@@ -40,6 +58,12 @@ class MemoryRepository:
     """在调用之间不保留连接的情况下持久化记忆条目。"""
 
     def __init__(self, database_path: str | Path) -> None:
+        """初始化 SQLite 记忆仓储。
+
+        :param database_path: SQLite 数据库文件路径；允许包含用户目录缩写。
+        """
+
+        # 提前保存规范绝对路径，保证后续每次短连接都访问同一个数据库。
         self.database_path = Path(database_path).expanduser().resolve(strict=False)
 
     def initialize(self) -> None:
@@ -112,6 +136,14 @@ class MemoryRepository:
             raise MemoryRepositoryError("Memory storage could not be initialized.") from exc
 
     def list(self, workspace_key: str, *, enabled_only: bool = False) -> list[StoredMemory]:
+        """按置顶状态和更新时间列出工作区记忆。
+
+        :param workspace_key: 规范工作区路径对应的不可逆仓储键。
+        :param enabled_only: 为 True 时仅返回允许注入上下文的条目。
+        :return: 排序稳定的内部记忆记录列表。
+        :raises MemoryRepositoryError: 数据库读取失败或记录格式损坏。
+        """
+
         query = "SELECT * FROM memory_entries WHERE workspace_key = ?"
         parameters: tuple[object, ...] = (workspace_key,)
         if enabled_only:
@@ -125,6 +157,15 @@ class MemoryRepository:
         return [self._decode(row) for row in rows]
 
     def get(self, workspace_key: str, memory_id: str) -> StoredMemory:
+        """读取工作区内的一条指定记忆。
+
+        :param workspace_key: 记忆所属工作区的仓储键。
+        :param memory_id: 记忆条目的唯一标识。
+        :return: 匹配的内部记忆记录。
+        :raises MemoryNotFoundError: 指定条目不存在。
+        :raises MemoryRepositoryError: 数据库读取失败或记录格式损坏。
+        """
+
         try:
             with self._connection() as connection:
                 row = connection.execute(
@@ -150,7 +191,22 @@ class MemoryRepository:
         content_hash: str,
         max_items: int,
     ) -> StoredMemory:
-        """在立即事务中检查容量并创建唯一记忆条目。"""
+        """在立即事务中检查容量并创建唯一记忆条目。
+
+        :param memory_id: 新条目的唯一标识。
+        :param workspace_key: 条目所属工作区的仓储键。
+        :param kind: 记忆的业务分类。
+        :param content: 已由服务层校验的记忆正文。
+        :param source: 条目的产生来源。
+        :param source_run_id: 自动条目所关联的运行标识。
+        :param pinned: 是否在快照排序中优先选择。
+        :param content_hash: 规范化正文的去重哈希。
+        :param max_items: 单个工作区允许的最大条目数。
+        :return: 插入并在同一事务内回读的记录。
+        :raises MemoryCapacityError: 工作区已达到容量上限。
+        :raises MemoryDuplicateError: 工作区中已存在等价正文。
+        :raises MemoryRepositoryError: 数据库写入或回读失败。
+        """
 
         # 第一步：开启立即事务，让容量检查和插入共享写锁，避免并发越过上限。
         record: StoredMemory | None = None
@@ -208,7 +264,17 @@ class MemoryRepository:
         memory_id: str,
         changes: Mapping[str, object],
     ) -> StoredMemory:
-        """以固定字段顺序生成更新语句，并返回事务内重新读取的记录。"""
+        """以固定字段顺序生成更新语句，并返回事务内重新读取的记录。
+
+        :param workspace_key: 记忆所属工作区的仓储键。
+        :param memory_id: 待更新记忆的唯一标识。
+        :param changes: 仅含允许字段及新值的映射。
+        :return: 更新后在同一事务内回读的记录。
+        :raises ValueError: 变更为空或包含不支持的字段。
+        :raises MemoryNotFoundError: 指定条目不存在。
+        :raises MemoryDuplicateError: 更新后的正文与已有条目重复。
+        :raises MemoryRepositoryError: 数据库更新或回读失败。
+        """
 
         # 第一步：拒绝空变更和未知字段，再按固定顺序构造参数化赋值列表。
         allowed = {"kind", "content", "pinned", "enabled", "content_hash"}
@@ -263,6 +329,14 @@ class MemoryRepository:
         return record
 
     def delete(self, workspace_key: str, memory_id: str) -> None:
+        """永久删除工作区内的一条记忆。
+
+        :param workspace_key: 记忆所属工作区的仓储键。
+        :param memory_id: 待删除记忆的唯一标识。
+        :raises MemoryNotFoundError: 指定条目不存在。
+        :raises MemoryRepositoryError: 数据库删除失败。
+        """
+
         try:
             with self._connection() as connection, connection:
                 cursor = connection.execute(
@@ -277,6 +351,13 @@ class MemoryRepository:
             raise MemoryRepositoryError("The memory entry could not be deleted.") from exc
 
     def purge(self, workspace_key: str) -> int:
+        """永久删除工作区内的全部记忆。
+
+        :param workspace_key: 待清理工作区的仓储键。
+        :return: 实际删除的非负条目数量。
+        :raises MemoryRepositoryError: 数据库删除失败。
+        """
+
         try:
             with self._connection() as connection, connection:
                 cursor = connection.execute(
@@ -288,6 +369,12 @@ class MemoryRepository:
 
     @contextmanager
     def _connection(self) -> Iterator[sqlite3.Connection]:
+        """为一次仓储操作创建并最终关闭 SQLite 连接。
+
+        :return: 通过上下文管理器产出的已配置连接。
+        :raises MemoryRepositoryError: 连接数据库失败。
+        """
+
         connection: sqlite3.Connection | None = None
         try:
             connection = sqlite3.connect(self.database_path, timeout=5.0)
@@ -305,6 +392,13 @@ class MemoryRepository:
 
     @staticmethod
     def _record(row: sqlite3.Row) -> StoredMemory:
+        """把字段完整的 SQLite 行转换为内部领域记录。
+
+        :param row: 含有记忆表全部字段的 SQLite 行。
+        :return: 类型明确的 ``StoredMemory``。
+        :raises ValueError: 枚举或时间字段无法解析。
+        """
+
         return StoredMemory(
             id=str(row["id"]),
             workspace_key=str(row["workspace_key"]),
@@ -321,6 +415,13 @@ class MemoryRepository:
 
     @classmethod
     def _decode(cls, row: sqlite3.Row) -> StoredMemory:
+        """安全解码数据库行并统一隐藏损坏数据细节。
+
+        :param row: 数据库查询返回的原始行。
+        :return: 解码后的内部记忆记录。
+        :raises MemoryRepositoryError: 行缺字段或字段值无法转换。
+        """
+
         try:
             return cls._record(row)
         except (IndexError, KeyError, OverflowError, TypeError, ValueError) as exc:

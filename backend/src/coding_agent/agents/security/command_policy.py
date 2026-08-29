@@ -11,6 +11,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
 class CommandDecision(str, Enum):
+    """命令安全分类器的三种执行决定。"""
+
     ALLOW = "allow"
     CONFIRM = "confirm"
     DENY = "deny"
@@ -18,10 +20,17 @@ class CommandDecision(str, Enum):
 
 @dataclass(frozen=True, slots=True)
 class CommandRequest:
+    """完成路径解析和风险分类后的不可变命令请求。"""
+
+    # 用户或模型最初提供的命令参数，不经过 shell 拼接。
     argv: tuple[str, ...]
+    # 首项已替换为可信绝对可执行文件路径的参数序列。
     resolved_argv: tuple[str, ...]
+    # 已解析且确认位于工作区内的命令工作目录。
     cwd: Path
+    # 命令分类器给出的允许、确认或拒绝决定。
     decision: CommandDecision
+    # 解释风险分类结果的安全文本。
     reason: str
 
     @property
@@ -187,7 +196,11 @@ _MINIMAL_CHILD_ENV_NAMES = frozenset(
 
 
 def should_inherit_environment_name(name: str) -> bool:
-    """判断继承的环境变量名对子进程是否安全。"""
+    """判断继承的环境变量名对子进程是否安全。
+
+    :param name: 原进程环境变量名称，匹配时不区分大小写。
+    :return: 名称不属于凭据或危险运行时变量规则时返回 ``True``。
+    """
 
     upper_name = name.upper()
     return not (
@@ -199,7 +212,11 @@ def should_inherit_environment_name(name: str) -> bool:
 
 
 def should_inherit_minimal_environment_name(name: str) -> bool:
-    """判断普通子工具是否需要某个非敏感环境变量。"""
+    """判断普通子工具是否需要某个非敏感环境变量。
+
+    :param name: 原进程环境变量名称。
+    :return: 变量既安全又属于命令运行所需最小白名单时返回 ``True``。
+    """
 
     if not should_inherit_environment_name(name):
         return False
@@ -213,7 +230,13 @@ def classify_command(
     *,
     python_executable: str | os.PathLike[str] | None,
 ) -> tuple[CommandDecision, str]:
-    """在不执行文件或进程 I/O 的情况下，对已解析命令参数进行风险分类。"""
+    """在不执行文件或进程 I/O 的情况下，对已解析命令参数进行风险分类。
+
+    :param original_argv: 调用方最初提供、尚未替换可执行文件路径的参数序列。
+    :param resolved_argv: 首项已解析为实际可执行文件路径的参数序列。
+    :param python_executable: 当前受信任 Python 解释器路径；无法确定时为空。
+    :return: 风险决定及适合审批界面展示的原因。
+    """
 
     # 第一步：无条件拒绝 shell、批处理、破坏性和提权程序。
     executable_name = Path(resolved_argv[0]).name.casefold()
@@ -262,6 +285,12 @@ def classify_command(
 
 
 def unsafe_test_arguments(arguments: Sequence[str]) -> bool:
+    """检查测试或编译模块参数是否可能越界、写文件或执行插件。
+
+    :param arguments: Python ``-m`` 模块名之后的命令参数。
+    :return: 发现危险选项、绝对路径或父目录穿越时返回 ``True``。
+    """
+
     for index, argument in enumerate(arguments):
         option = argument.split("=", 1)[0]
         if option in _UNSAFE_TEST_OPTIONS:
@@ -278,6 +307,12 @@ def unsafe_test_arguments(arguments: Sequence[str]) -> bool:
 
 
 def _safe_node_arguments(arguments: Sequence[str]) -> bool:
+    """判断 Node 参数是否属于版本、语法检查或工作区内测试形式。
+
+    :param arguments: 可执行文件名之后的 Node 命令参数。
+    :return: 参数只包含固定安全形式和相对路径时返回 ``True``。
+    """
+
     if tuple(arguments) in {("--version",), ("-v",)}:
         return True
     if not arguments:
@@ -299,6 +334,12 @@ def _safe_node_arguments(arguments: Sequence[str]) -> bool:
 
 
 def _normcase_path(path: Path) -> str:
+    """生成适合当前平台进行安全比较的绝对路径键。
+
+    :param path: 待规范化路径。
+    :return: 应用绝对化和平台大小写规则后的字符串。
+    """
+
     return os.path.normcase(os.path.abspath(os.fspath(path)))
 
 

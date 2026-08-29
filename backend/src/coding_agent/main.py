@@ -27,6 +27,12 @@ from coding_agent.agents.security import WorkspacePolicy
 
 
 def _origin_is_local(origin: str) -> bool:
+    """判断浏览器 Origin 是否来自受信任的本机地址。
+
+    :param origin: 请求头中的完整 Origin 文本。
+    :return: 协议为 HTTP(S) 且主机为回环地址或测试主机时为 True。
+    """
+
     try:
         parsed = urlsplit(origin)
     except ValueError:
@@ -47,11 +53,24 @@ def create_app(
     persistence: PersistenceService | None = None,
     migrate_database: bool = True,
 ) -> FastAPI:
-    """构建可注入运行器和管理器边界的应用，便于离线测试。"""
+    """构建可注入运行器和管理器边界的应用，便于离线测试。
+
+    :param settings: 可选应用配置；省略时从环境和 ``.env`` 加载。
+    :param runner: 可选 Agent 执行适配器，常用于测试替身。
+    :param manager: 可选进程内运行管理器；注入时生命周期归调用方所有。
+    :param database: 可选数据库封装；注入时不会由应用释放。
+    :param persistence: 可选持久化门面；默认由数据库会话工厂构建。
+    :param migrate_database: 是否在自建数据库连接前自动迁移到最新版。
+    :return: 已配置中间件、路由、错误处理和生命周期的 FastAPI 应用。
+    """
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        """在 Web 服务生命周期内装配并释放数据库、运行管理器和业务服务。"""
+        """在 Web 服务生命周期内装配并释放数据库、运行管理器和业务服务。
+
+        :param app: 当前启动或关闭的 FastAPI 应用实例。
+        :return: 让出控制权期间表示应用可以接收请求。
+        """
 
         # 第一步：加载配置，迁移并检查数据库；注入对象则保留其所有权给调用方。
         effective_settings = settings or AppSettings()
@@ -125,7 +144,12 @@ def create_app(
 
     @application.middleware("http")
     async def local_security_headers(request: Request, call_next):
-        """限制写请求来源，并为所有响应补充浏览器安全头。"""
+        """限制写请求来源，并为所有响应补充浏览器安全头。
+
+        :param request: 当前 HTTP 请求。
+        :param call_next: 调用下一个中间件或路由处理器的异步函数。
+        :return: 拒绝响应或补齐安全头后的业务响应。
+        """
 
         # 第一步：带 Origin 的写请求只能来自本机 Web 前端。
         origin = request.headers.get("origin")

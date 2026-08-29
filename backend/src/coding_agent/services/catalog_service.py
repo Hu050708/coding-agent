@@ -26,14 +26,32 @@ class CatalogService:
         persistence: PersistenceService,
         workspace_policy: WorkspacePolicy,
     ) -> None:
+        """初始化目录服务及受限文件夹浏览器。
+
+        :param persistence: 负责工作区、会话和消息事务的持久化门面。
+        :param workspace_policy: 负责工作区路径边界校验的安全策略。
+        """
+
+        # 两项共享依赖分别负责数据库事务与文件系统信任边界。
         self.persistence = persistence
         self.workspace_policy = workspace_policy
         self.browser = DirectoryBrowser(workspace_policy)
 
     def browse_directories(self, path: str | None = None) -> dict[str, object]:
+        """浏览允许根目录内的直接子目录。
+
+        :param path: 待浏览目录；None 表示从允许根目录开始。
+        :return: 当前目录、父目录和可访问子目录的安全视图。
+        """
+
         return self.browser.browse(path)
 
     def list_workspaces(self) -> list[dict[str, Any]]:
+        """列出活动工作区的公开视图。
+
+        :return: 不暴露允许根目录完整信息的工作区字典列表。
+        """
+
         return [
             workspace_view(item, allowed_root=self.workspace_policy.allowed_root)
             for item in self.persistence.list_workspaces()
@@ -42,7 +60,13 @@ class CatalogService:
     def create_workspace(
         self, *, path: str, display_name: str | None = None
     ) -> dict[str, Any]:
-        """校验本地目录后，将其登记为 Agent 可操作的工作区。"""
+        """校验本地目录后，将其登记为 Agent 可操作的工作区。
+
+        :param path: 待登记的本地目录路径。
+        :param display_name: 可选显示名称；省略时使用目录名。
+        :return: 新工作区的公开 API 视图。
+        :raises ApplicationError: 路径无效、越界或已经登记。
+        """
 
         # 第一步：由工作区策略解析真实路径并确认目录位于允许根目录内。
         try:
@@ -66,6 +90,12 @@ class CatalogService:
         return workspace_view(record, allowed_root=self.workspace_policy.allowed_root)
 
     def delete_workspace(self, workspace_id: str) -> None:
+        """删除没有活动运行的工作区登记。
+
+        :param workspace_id: 目标工作区 ID 文本。
+        :raises ApplicationError: 工作区不存在或仍有活动运行。
+        """
+
         try:
             self.persistence.delete_workspace(workspace_id)
         except PersistenceNotFoundError as exc:
@@ -76,6 +106,13 @@ class CatalogService:
             ) from exc
 
     def list_conversations(self, workspace_id: str) -> list[dict[str, Any]]:
+        """列出工作区会话并标注其活动运行。
+
+        :param workspace_id: 工作区 ID 文本。
+        :return: 会话公开视图列表。
+        :raises ApplicationError: 工作区不存在。
+        """
+
         try:
             self.persistence.get_workspace(workspace_id)
             active = self.persistence.active_run_for_workspace(workspace_id)
@@ -92,7 +129,15 @@ class CatalogService:
         default_permission_mode: str,
         use_memory: bool,
     ) -> dict[str, Any]:
-        """在指定工作区下创建带默认运行设置的会话。"""
+        """在指定工作区下创建带默认运行设置的会话。
+
+        :param workspace_id: 所属工作区 ID。
+        :param title: 可选标题；省略时使用“新会话”。
+        :param default_permission_mode: 新运行的默认权限模式。
+        :param use_memory: 新运行默认是否使用项目记忆。
+        :return: 新会话公开视图。
+        :raises ApplicationError: 工作区不存在、归档或不可用。
+        """
 
         # 第一步：把前端设置原样交给事务服务，并为缺省标题提供用户可见名称。
         try:
@@ -112,6 +157,13 @@ class CatalogService:
         return conversation_view(record)
 
     def get_conversation(self, conversation_id: str) -> dict[str, Any]:
+        """读取会话及其可能的活动运行。
+
+        :param conversation_id: 会话 ID 文本。
+        :return: 会话公开视图。
+        :raises ApplicationError: 会话不存在。
+        """
+
         try:
             record = self.persistence.get_conversation(conversation_id)
             active = self.persistence.active_run_for_workspace(record.workspace_id)
@@ -129,7 +181,15 @@ class CatalogService:
         default_permission_mode: str | None,
         use_memory: bool | None,
     ) -> dict[str, Any]:
-        """部分更新会话设置并附带当前工作区运行状态。"""
+        """部分更新会话设置并附带当前工作区运行状态。
+
+        :param conversation_id: 目标会话 ID。
+        :param title: 新标题；None 表示不修改。
+        :param default_permission_mode: 新默认权限；None 表示不修改。
+        :param use_memory: 新默认记忆开关；None 表示不修改。
+        :return: 更新后的会话公开视图。
+        :raises ApplicationError: 会话不存在。
+        """
 
         # 第一步：先读取会话以确定所属工作区，再执行限定工作区的更新。
         try:
@@ -150,6 +210,12 @@ class CatalogService:
         return conversation_view(record, active_run=active)
 
     def delete_conversation(self, conversation_id: str) -> None:
+        """删除没有活动运行的会话。
+
+        :param conversation_id: 目标会话 ID。
+        :raises ApplicationError: 会话不存在或仍有活动运行。
+        """
+
         try:
             current = self.persistence.get_conversation(conversation_id)
             self.persistence.delete_conversation(current.workspace_id, conversation_id)
@@ -163,6 +229,13 @@ class CatalogService:
             ) from exc
 
     def list_messages(self, conversation_id: str) -> list[dict[str, Any]]:
+        """列出会话中的全部可见消息。
+
+        :param conversation_id: 会话 ID。
+        :return: 按序号排列的消息公开视图。
+        :raises ApplicationError: 会话不存在。
+        """
+
         try:
             records = self.persistence.list_messages(conversation_id)
         except PersistenceNotFoundError as exc:
@@ -173,6 +246,12 @@ class CatalogService:
 
 
 def _path_key(path: Path) -> str:
+    """生成适合当前操作系统进行唯一比较的绝对路径键。
+
+    :param path: 已解析的工作区路径。
+    :return: 经过绝对化和大小写规范化的路径文本。
+    """
+
     return os.path.normcase(os.path.abspath(os.fspath(path)))
 
 

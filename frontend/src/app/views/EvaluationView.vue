@@ -159,6 +159,7 @@ onMounted(() => void evaluations.load())
             <div class="run-meta">
               <span><b>模型</b>{{ run.model_requested }}</span>
               <span><b>提交</b><code>{{ run.source_commit?.slice(0, 8) ?? 'unknown' }}</code></span>
+              <span><b>端到端</b>{{ run.end_to_end_successes }}/{{ run.total_trials }}</span>
               <span :class="{ warning: run.source_dirty }"><b>源码</b>{{ run.source_dirty ? '有未提交改动' : '干净工作区' }}</span>
               <span><b>开始</b>{{ formatDate(trials[0]?.started_at) }}</span>
             </div>

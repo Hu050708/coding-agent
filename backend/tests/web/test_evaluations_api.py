@@ -49,5 +49,6 @@ def test_evaluation_api_lists_and_reads_summary(tmp_path) -> None:
     assert listed.json()["runs"][0]["run_id"] == "formal-3x3"
     assert detail.status_code == 200
     assert detail.json()["model_requested"] == "deepseek-v4-flash"
+    assert detail.json()["end_to_end_successes"] == 0
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "evaluation_run_not_found"

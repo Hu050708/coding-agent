@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import json
 
 from evaluation.core.contracts import (
@@ -44,6 +45,14 @@ def test_trace_reader_aggregates_only_safe_runtime_metrics(tmp_path) -> None:
             "tool_calls": 2,
             "usage": {"total_tokens": 12},
             "duration_ms": 1250,
+            "change_check": {
+                "status": "passed",
+                "change_version": 2,
+                "checked_version": 2,
+                "check_kind": "test",
+                "tool_sequence": 2,
+                "exit_code": 0,
+            },
         },
     ]
     trace.write_text(
@@ -61,6 +70,7 @@ def test_trace_reader_aggregates_only_safe_runtime_metrics(tmp_path) -> None:
     assert result.error_counts == {"command_exit_nonzero": 1}
     assert result.repeat_warnings == 1
     assert result.response_models == ("deepseek-v4-flash-202608",)
+    assert result.change_check["status"] == "passed"
 
 
 def test_workspace_snapshot_reports_changes_and_ignores_runtime_files(tmp_path) -> None:
@@ -126,6 +136,14 @@ def test_reporter_writes_json_and_markdown(tmp_path) -> None:
             tool_calls=3,
             usage={"total_tokens": 100},
             duration_ms=1500,
+            change_check={
+                "status": "passed",
+                "change_version": 1,
+                "checked_version": 1,
+                "check_kind": "test",
+                "tool_sequence": 3,
+                "exit_code": 0,
+            },
         ),
         workspace=WorkspaceChanges(modified=("src/example.py",)),
         verification=VerificationResult(
@@ -137,13 +155,32 @@ def test_reporter_writes_json_and_markdown(tmp_path) -> None:
         template_digest="abc",
     )
 
+    runtime_failure = replace(
+        result,
+        trial_id="date-02",
+        repeat_index=2,
+        agent_exit_code=1,
+        classification="agent_runtime_failure",
+    )
     json_path, markdown_path = BenchmarkReporter().write_summary(
         tmp_path,
-        [result],
+        [result, runtime_failure],
         model="deepseek-v4-flash",
         source_commit="commit",
         source_dirty=False,
     )
 
-    assert json.loads(json_path.read_text(encoding="utf-8"))["verified_success_rate"] == 1.0
-    assert "1/1" in markdown_path.read_text(encoding="utf-8")
+    summary = json.loads(json_path.read_text(encoding="utf-8"))
+    assert summary["verified_success_rate"] == 1.0
+    assert summary["verified_successes"] == 2
+    assert summary["end_to_end_successes"] == 1
+    assert summary["end_to_end_success_rate"] == 0.5
+    assert summary["tasks"]["date_boundary"]["successes"] == 2
+    assert summary["tasks"]["date_boundary"]["end_to_end_successes"] == 1
+    assert summary["current_checks"] == 2
+    assert summary["check_verifier_mismatches"] == 0
+    markdown = markdown_path.read_text(encoding="utf-8")
+    assert "独立验收成功：2/2" in markdown
+    assert "端到端成功：1/2" in markdown
+    assert "通过 | agent_runtime_failure" in markdown
+    assert "通过（test）" in markdown

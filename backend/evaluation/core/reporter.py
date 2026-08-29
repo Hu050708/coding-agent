@@ -58,6 +58,17 @@ class BenchmarkReporter:
         source_dirty: bool | None,
     ) -> dict[str, object]:
         classifications = Counter(item.classification for item in trials)
+        check_statuses = Counter(
+            str(item.trace.change_check.get("status", "unknown")) for item in trials
+        )
+        current_checks = sum(
+            item.trace.change_check.get("status") == "passed" for item in trials
+        )
+        check_verifier_mismatches = sum(
+            (item.trace.change_check.get("status") == "passed")
+            != item.verification.passed
+            for item in trials
+        )
         durations = [item.trace.duration_ms / 1000 for item in trials]
         tokens = [item.trace.usage.get("total_tokens", 0) for item in trials]
         by_task: dict[str, dict[str, object]] = {}
@@ -65,23 +76,36 @@ class BenchmarkReporter:
         for item in trials:
             grouped[item.task_id].append(item)
         for task_id, task_trials in grouped.items():
-            successes = sum(item.classification == "success" for item in task_trials)
+            verifier_successes = sum(item.verification.passed for item in task_trials)
+            end_to_end_successes = sum(
+                item.classification == "success" for item in task_trials
+            )
             by_task[task_id] = {
                 "title": task_trials[0].task_title,
                 "runs": len(task_trials),
-                "successes": successes,
-                "success_rate": successes / len(task_trials),
+                "successes": verifier_successes,
+                "success_rate": verifier_successes / len(task_trials),
+                "end_to_end_successes": end_to_end_successes,
+                "end_to_end_success_rate": end_to_end_successes / len(task_trials),
             }
-        success_count = classifications.get("success", 0)
+        verifier_success_count = sum(item.verification.passed for item in trials)
+        end_to_end_success_count = classifications.get("success", 0)
         return {
             "schema_version": 1,
             "model_requested": model,
             "source_commit": source_commit,
             "source_dirty": source_dirty,
             "total_trials": len(trials),
-            "verified_successes": success_count,
-            "verified_success_rate": success_count / len(trials) if trials else 0.0,
+            "verified_successes": verifier_success_count,
+            "verified_success_rate": verifier_success_count / len(trials) if trials else 0.0,
+            "end_to_end_successes": end_to_end_success_count,
+            "end_to_end_success_rate": (
+                end_to_end_success_count / len(trials) if trials else 0.0
+            ),
             "classifications": dict(sorted(classifications.items())),
+            "change_check_statuses": dict(sorted(check_statuses.items())),
+            "current_checks": current_checks,
+            "check_verifier_mismatches": check_verifier_mismatches,
             "duration_seconds": {
                 "mean": mean(durations) if durations else 0.0,
                 "median": median(durations) if durations else 0.0,
@@ -100,30 +124,44 @@ class BenchmarkReporter:
     def _render_markdown(
         trials: tuple[TrialResult, ...], summary: dict[str, object]
     ) -> str:
-        rate = float(summary["verified_success_rate"]) * 100
+        verified_rate = float(summary["verified_success_rate"]) * 100
+        end_to_end_rate = float(summary["end_to_end_success_rate"]) * 100
         lines = [
             "# Coding Agent 可复现评测报告",
             "",
             "本报告使用固定任务模板、全新临时工作区和工作区外独立验收器。",
-            "模型最终回答不作为成功依据，只有 Agent 正常结束且 verifier 全部通过才计为成功。",
+            "模型最终回答不作为成功依据；外部验收和 Agent 端到端运行结果分别统计。",
             "",
             "## 总览",
             "",
             f"- 请求模型：`{summary['model_requested']}`",
             f"- 源码提交：`{summary['source_commit'] or 'unknown'}`",
             f"- 工作区有未提交改动：`{summary['source_dirty']}`",
-            f"- 独立验收成功：{summary['verified_successes']}/{summary['total_trials']}（{rate:.1f}%）",
+            f"- 独立验收成功：{summary['verified_successes']}/{summary['total_trials']}（{verified_rate:.1f}%）",
+            f"- 端到端成功：{summary['end_to_end_successes']}/{summary['total_trials']}（{end_to_end_rate:.1f}%）",
+            f"- 最后修改后检查通过：{summary['current_checks']}/{summary['total_trials']}",
+            f"- 内部检查与外部验收不一致：{summary['check_verifier_mismatches']} 次",
             "",
             "## 分任务结果",
             "",
-            "| 任务 | 类别 | 轮次 | 结果 | 模型调用 | 工具调用 | Token | 耗时 |",
-            "|---|---|---:|---|---:|---:|---:|---:|",
+            "| 任务 | 类别 | 轮次 | 外部验收 | 端到端结果 | 修改后检查 | 模型调用 | 工具调用 | Token | 耗时 |",
+            "|---|---|---:|---|---|---|---:|---:|---:|---:|",
         ]
         for trial in trials:
+            check_status = str(trial.trace.change_check.get("status", "unknown"))
+            check_kind = trial.trace.change_check.get("check_kind")
+            check_label = {
+                "passed": f"通过（{check_kind or 'check'}）",
+                "failed": "未通过",
+                "outdated": "已过期",
+                "needs_check": "未检查",
+                "no_changes": "未修改",
+            }.get(check_status, "未知")
             lines.append(
                 "| "
                 f"{trial.task_title} | {trial.category} | {trial.repeat_index} | "
-                f"{trial.classification} | {trial.trace.model_calls} | "
+                f"{'通过' if trial.verification.passed else '未通过'} | "
+                f"{trial.classification} | {check_label} | {trial.trace.model_calls} | "
                 f"{trial.trace.tool_calls} | {trial.trace.usage.get('total_tokens', 0)} | "
                 f"{trial.trace.duration_ms / 1000:.1f}s |"
             )

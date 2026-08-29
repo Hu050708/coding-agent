@@ -40,6 +40,7 @@ def test_evaluation_service_lists_and_reads_detail(tmp_path) -> None:
 
     assert {item["run_id"] for item in items} == {"formal-older", "formal-latest"}
     assert service.get_run("formal-latest")["verified_successes"] == 1
+    assert service.get_run("formal-latest")["end_to_end_successes"] == 1
 
 
 def test_evaluation_service_rejects_unknown_and_traversal_ids(tmp_path) -> None:

@@ -52,6 +52,7 @@ class TraceSummary:
     tool_counts: dict[str, int] = field(default_factory=dict)
     error_counts: dict[str, int] = field(default_factory=dict)
     repeat_warnings: int = 0
+    change_check: dict[str, object] = field(default_factory=dict)
     trace_file: str | None = None
 
     def as_dict(self) -> dict[str, object]:

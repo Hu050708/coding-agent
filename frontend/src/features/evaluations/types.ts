@@ -60,6 +60,8 @@ export interface EvaluationRunListItem {
   total_trials: number
   verified_successes: number
   verified_success_rate: number
+  end_to_end_successes: number
+  end_to_end_success_rate: number
   duration_seconds: EvaluationMetricStats
   total_tokens: EvaluationMetricStats
   tasks: Record<string, EvaluationTaskSummary>

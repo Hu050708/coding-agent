@@ -85,6 +85,8 @@ class EvaluationRunListItem(ApiModel):
     total_trials: int
     verified_successes: int
     verified_success_rate: float
+    end_to_end_successes: int
+    end_to_end_success_rate: float
     duration_seconds: EvaluationMetricStats
     total_tokens: EvaluationMetricStats
     tasks: dict[str, EvaluationTaskSummary]

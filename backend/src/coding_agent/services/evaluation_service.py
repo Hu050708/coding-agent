@@ -20,6 +20,8 @@ _LIST_FIELDS = (
     "total_trials",
     "verified_successes",
     "verified_success_rate",
+    "end_to_end_successes",
+    "end_to_end_success_rate",
     "duration_seconds",
     "total_tokens",
     "tasks",
@@ -82,6 +84,18 @@ class EvaluationReportService:
                 "evaluation_report_invalid",
                 "The evaluation report has an invalid structure.",
             )
+        classifications = payload.get("classifications", {})
+        end_to_end_successes = (
+            classifications.get("success", 0)
+            if isinstance(classifications, dict)
+            else 0
+        )
+        total_trials = payload.get("total_trials", 0)
+        payload.setdefault("end_to_end_successes", end_to_end_successes)
+        payload.setdefault(
+            "end_to_end_success_rate",
+            end_to_end_successes / total_trials if total_trials else 0.0,
+        )
         return {**payload, "run_id": run_id}
 
     @staticmethod

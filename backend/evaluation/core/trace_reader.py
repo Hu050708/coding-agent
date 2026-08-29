@@ -50,6 +50,8 @@ class TraceReader:
         usage = finished.get("usage")
         if not isinstance(usage, dict):
             usage = self._sum_usage(models)
+        raw_change_check = finished.get("change_check")
+        change_check = dict(raw_change_check) if isinstance(raw_change_check, dict) else {}
 
         trace_name = path.name
         if relative_to is not None:
@@ -73,6 +75,7 @@ class TraceReader:
             tool_counts=dict(sorted(tool_counts.items())),
             error_counts=dict(sorted(error_counts.items())),
             repeat_warnings=sum(item.get("progress_warning") is True for item in tools),
+            change_check=change_check,
             trace_file=trace_name,
         )
 

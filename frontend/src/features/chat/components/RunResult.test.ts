@@ -1,8 +1,8 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import type { RunSummary } from '../../../shared/api/types'
-import RunOutcomeCard from './RunOutcomeCard.vue'
+import type { RunSummary } from '../../runs/types'
+import RunResult from './RunResult.vue'
 
 function completedRun(): RunSummary {
   return {
@@ -27,9 +27,9 @@ function completedRun(): RunSummary {
   }
 }
 
-describe('RunOutcomeCard', () => {
+describe('RunResult', () => {
   it('separates model termination from external verification evidence', () => {
-    const wrapper = mount(RunOutcomeCard, { props: { run: completedRun() } })
+    const wrapper = mount(RunResult, { props: { run: completedRun() } })
 
     expect(wrapper.text()).toContain('待外部验证')
     expect(wrapper.text()).toContain('独立验收')

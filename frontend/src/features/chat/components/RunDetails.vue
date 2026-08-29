@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { RunEventEnvelope, RunSummary } from '../../../shared/api/types'
+import type { RunEventEnvelope, RunSummary } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
-import ActivitySpine from './ActivitySpine.vue'
-import RunOutcomeCard from './RunOutcomeCard.vue'
+import RunResult from './RunResult.vue'
+import RunTimeline from './RunTimeline.vue'
 
 const props = defineProps<{
   run: RunSummary | null
@@ -77,8 +77,8 @@ const streamCopy = computed(() => {
           </button>
         </section>
 
-        <ActivitySpine :events="events" :status="run.status" />
-        <RunOutcomeCard v-if="terminal" :run="run" />
+        <RunTimeline :events="events" :status="run.status" />
+        <RunResult v-if="terminal" :run="run" />
       </template>
 
       <div v-else class="inspector-empty">
@@ -88,10 +88,6 @@ const streamCopy = computed(() => {
       </div>
     </div>
 
-    <footer class="inspector-footer">
-      <AppIcon name="shield" />
-      <span>不展示模型隐藏推理，只展示可安全重放的运行事实。</span>
-    </footer>
   </aside>
 </template>
 
@@ -323,26 +319,6 @@ const streamCopy = computed(() => {
   margin-top: 7px;
   font-size: 11px;
   line-height: 1.55;
-}
-
-.inspector-footer {
-  display: flex;
-  flex: none;
-  align-items: flex-start;
-  gap: 7px;
-  padding: 12px 17px 15px;
-  border-top: 1px solid var(--line);
-  color: var(--ink-muted);
-  background: var(--surface);
-  font-size: 9.5px;
-  line-height: 1.4;
-}
-
-.inspector-footer :deep(svg) {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  margin-top: 1px;
 }
 
 @media (max-width: 1240px) {

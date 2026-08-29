@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { openRunEventStream, parseRunEvent, type EventSourceLike } from './runEventStream'
+import { openRunEventStream, parseRunEvent, type EventSourceLike } from './events'
 
 class FakeEventSource implements EventSourceLike {
   onopen: ((event: Event) => void) | null = null

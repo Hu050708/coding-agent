@@ -1,4 +1,4 @@
-import type { RunEventEnvelope, RunStatus, RunSummary } from '../../shared/api/types'
+import type { RunEventEnvelope, RunStatus, RunSummary } from './types'
 
 export type ActivityTone = 'neutral' | 'active' | 'success' | 'warning' | 'danger'
 export type ActivityStage = 'control' | 'decision' | 'execution' | 'feedback' | 'approval'
@@ -9,6 +9,7 @@ export interface ActivityItem {
   timestamp: string
   title: string
   detail: string | null
+  detailCode: boolean
   meta: string | null
   tone: ActivityTone
   stage: ActivityStage
@@ -81,6 +82,7 @@ export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
   const data = envelope.data
   let title = '运行状态更新'
   let detail: string | null = null
+  let detailCode = false
   let meta: string | null = null
   let tone: ActivityTone = 'neutral'
   let stage: ActivityStage = 'control'
@@ -115,21 +117,31 @@ export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
       stage = 'decision'
       break
     }
-    case 'tool.started':
+    case 'tool.started': {
       title = toolName(data.tool_name)
-      detail = '正在当前工作区内执行'
+      const command = text(data.argv_summary)
+      const target = text(data.target)
+      detail = command
+        ? `命令：${command}`
+        : target
+          ? `目标：${target}`
+          : '正在当前工作区内执行'
+      detailCode = command !== null || target !== null
       tone = 'active'
       stage = 'execution'
       break
+    }
     case 'tool.completed': {
       const ok = data.ok !== false && data.success !== false
       title = `${toolName(data.tool_name)}${ok ? '已返回' : '失败'}`
       const repeated = data.progress_warning === true
+      const resultSummary = text(data.result_summary)
       detail = repeated
         ? '检测到完全重复的工具结果，已提示模型调整策略'
         : ok
-          ? '结果已作为事实反馈给模型'
+          ? resultSummary ?? '结果已作为事实反馈给模型'
           : text(data.error_code) ?? '工具返回失败结果，模型可据此调整策略'
+      detailCode = ok && resultSummary !== null && !repeated
       const duration = number(data.duration_ms)
       meta = duration === null ? null : `${Math.max(0, Math.round(duration))} ms`
       tone = repeated ? 'warning' : ok ? 'success' : 'danger'
@@ -170,6 +182,7 @@ export function presentRunEvent(envelope: RunEventEnvelope): ActivityItem {
     timestamp: envelope.timestamp,
     title,
     detail,
+    detailCode,
     meta,
     tone,
     stage,

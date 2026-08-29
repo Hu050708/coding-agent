@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { HttpClient } from '../../shared/api/http'
-import { createConversationApi } from './conversationApi'
+import { createConversationApi } from './api'
 
 describe('conversation API', () => {
   it('lists conversations by workspace ID rather than a filesystem path', async () => {

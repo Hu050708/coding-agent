@@ -1,5 +1,6 @@
 import { httpClient, type HttpClient } from '../../shared/api/http'
-import type { ChatMessage, Conversation, PermissionMode } from '../../shared/api/types'
+import type { PermissionMode } from '../../shared/api/types'
+import type { ChatMessage, Conversation } from './types'
 
 export interface CreateConversationInput {
   workspace_id: string

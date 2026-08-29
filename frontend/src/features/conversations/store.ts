@@ -2,8 +2,9 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { localizedError } from '../../shared/api/http'
-import type { ChatMessage, Conversation, PermissionMode } from '../../shared/api/types'
-import { conversationApi } from './conversationApi'
+import type { PermissionMode } from '../../shared/api/types'
+import type { ChatMessage, Conversation } from './types'
+import { conversationApi } from './api'
 
 export const useConversationStore = defineStore('conversations', () => {
   const items = ref<Conversation[]>([])

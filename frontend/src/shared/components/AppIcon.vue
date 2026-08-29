@@ -17,6 +17,7 @@ defineProps<{
     | 'terminal'
     | 'check'
     | 'copy'
+    | 'beaker'
 }>()
 </script>
 
@@ -38,6 +39,7 @@ defineProps<{
     <path v-else-if="name === 'terminal'" d="m5 7 4 4-4 4M11 16h8" />
     <path v-else-if="name === 'check'" d="m5 12 4 4L19 6" />
     <path v-else-if="name === 'copy'" d="M9 8h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2zM16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h2" />
+    <path v-else-if="name === 'beaker'" d="M9 3h6M10 3v5l-5.2 9.2A2.5 2.5 0 0 0 7 21h10a2.5 2.5 0 0 0 2.2-3.8L14 8V3M7.2 15h9.6" />
   </svg>
 </template>
 

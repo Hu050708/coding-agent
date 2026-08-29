@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
 
-import type { MemoryEntry } from '../../shared/api/types'
+import type { MemoryEntry } from './types'
 import AppIcon from '../../shared/components/AppIcon.vue'
-import { useMemoryStore } from './memoryStore'
+import { useMemoryStore } from './store'
 
 const memory = useMemoryStore()
 const panel = ref<HTMLElement | null>(null)

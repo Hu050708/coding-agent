@@ -2,15 +2,12 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { localizedError } from '../../shared/api/http'
-import type {
-  ChatMessage,
-  PermissionMode,
-  RunEventEnvelope,
-  RunSummary,
-} from '../../shared/api/types'
-import { useConversationStore } from '../conversations/conversationStore'
-import { openRunEventStream } from './runEventStream'
-import { runApi } from './runApi'
+import type { PermissionMode } from '../../shared/api/types'
+import type { ChatMessage } from '../conversations/types'
+import type { RunEventEnvelope, RunSummary } from './types'
+import { useConversationStore } from '../conversations/store'
+import { openRunEventStream } from './events'
+import { runApi } from './api'
 
 const terminalStatuses = new Set([
   'completed',

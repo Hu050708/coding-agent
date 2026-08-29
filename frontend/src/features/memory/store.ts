@@ -2,8 +2,8 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { localizedError } from '../../shared/api/http'
-import type { MemoryEntry } from '../../shared/api/types'
-import { memoryApi, type MemoryInput } from './memoryApi'
+import type { MemoryEntry } from './types'
+import { memoryApi, type MemoryInput } from './api'
 
 export const useMemoryStore = defineStore('memory', () => {
   const workspaceId = ref<string | null>(null)

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { HttpClient } from '../../shared/api/http'
-import { createWorkspaceApi } from './workspaceApi'
+import { createWorkspaceApi } from './api'
 
 describe('workspace API', () => {
   it('uses IDs after the one-time path selection', async () => {

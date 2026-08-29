@@ -1,5 +1,5 @@
 import { httpClient, type HttpClient } from '../../shared/api/http'
-import type { DirectoryListing, Workspace } from '../../shared/api/types'
+import type { DirectoryListing, Workspace } from './types'
 
 export interface CreateWorkspaceInput {
   path: string

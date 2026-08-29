@@ -2,9 +2,9 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
 import { localizedError } from '../../shared/api/http'
-import type { DirectoryListing } from '../../shared/api/types'
+import type { DirectoryListing } from './types'
 import AppIcon from '../../shared/components/AppIcon.vue'
-import { workspaceApi } from './workspaceApi'
+import { workspaceApi } from './api'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{

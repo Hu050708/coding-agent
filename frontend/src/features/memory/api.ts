@@ -1,5 +1,5 @@
 import { httpClient, type HttpClient } from '../../shared/api/http'
-import type { MemoryEntry } from '../../shared/api/types'
+import type { MemoryEntry } from './types'
 
 export interface MemoryInput {
   kind: MemoryEntry['kind']
@@ -8,7 +8,7 @@ export interface MemoryInput {
   enabled?: boolean
 }
 
-export function createMemoryApi(http: HttpClient = httpClient) {
+function createMemoryApi(http: HttpClient = httpClient) {
   const base = (workspaceId: string) =>
     `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/memories`
 

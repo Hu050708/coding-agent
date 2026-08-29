@@ -1,7 +1,7 @@
 import { mount } from '@vue/test-utils'
 import { describe, expect, it } from 'vitest'
 
-import type { ApprovalRequest } from '../../../shared/api/types'
+import type { ApprovalRequest } from '../../runs/types'
 import ApprovalCard from './ApprovalCard.vue'
 
 const approval: ApprovalRequest = {
@@ -20,11 +20,16 @@ const approval: ApprovalRequest = {
 function mountCard() {
   return mount(ApprovalCard, {
     props: { approval, busy: false },
-    global: { stubs: { teleport: true } },
   })
 }
 
 describe('ApprovalCard', () => {
+  it('renders inline without a page-blocking backdrop', () => {
+    const wrapper = mountCard()
+    expect(wrapper.find('.approval-zone').exists()).toBe(true)
+    expect(wrapper.find('.approval-backdrop').exists()).toBe(false)
+  })
+
   it('shows escaped arguments without injecting a forged command line', () => {
     const wrapper = mountCard()
     const command = wrapper.get('pre').text()

@@ -2,7 +2,7 @@
 import { onBeforeUnmount, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { useConversationStore } from '../features/conversations/conversationStore'
+import { useConversationStore } from '../features/conversations/store'
 import MemoryDrawer from '../features/memory/MemoryDrawer.vue'
 import WorkspaceSidebar from '../features/workspaces/WorkspaceSidebar.vue'
 

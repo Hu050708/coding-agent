@@ -2,7 +2,7 @@ import {
   RUN_EVENT_NAMES,
   type RunEventEnvelope,
   type RunEventName,
-} from '../../shared/api/types'
+} from './types'
 
 export interface EventSourceLike {
   onopen: ((event: Event) => void) | null

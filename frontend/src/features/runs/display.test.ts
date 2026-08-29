@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { presentRunEvent, presentRunOutcome } from './runPresentation'
+import { presentRunEvent, presentRunOutcome } from './display'
 
 describe('run event presentation', () => {
   it('only renders bounded safe summaries', () => {
@@ -10,7 +10,7 @@ describe('run event presentation', () => {
       timestamp: '2026-08-27T10:00:00Z',
       data: {
         tool_name: 'run_command',
-        summary: `line one\n${'x'.repeat(500)}`,
+        result_summary: `line one\n${'x'.repeat(500)}`,
         duration_ms: 15.6,
         raw_output: 'must never be presented',
       },
@@ -18,6 +18,24 @@ describe('run event presentation', () => {
     expect(item.detail).not.toContain('\n')
     expect(item.detail?.length).toBeLessThanOrEqual(240)
     expect(item.meta).toBe('16 ms')
+  })
+
+  it('shows safe command and created-file summaries', () => {
+    const started = presentRunEvent({
+      seq: 2,
+      event: 'tool.started',
+      timestamp: '2026-08-27T10:00:00Z',
+      data: { tool_name: 'run_command', argv_summary: 'python hello.py' },
+    })
+    const completed = presentRunEvent({
+      seq: 3,
+      event: 'tool.completed',
+      timestamp: '2026-08-27T10:00:01Z',
+      data: { tool_name: 'write_file', ok: true, result_summary: '创建 hello.py · 428 B' },
+    })
+
+    expect(started).toMatchObject({ detail: '命令：python hello.py', detailCode: true })
+    expect(completed).toMatchObject({ detail: '创建 hello.py · 428 B', detailCode: true })
   })
 
   it('marks interrupted runs as recoverable warnings', () => {

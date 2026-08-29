@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { RunEventEnvelope, RunStatus } from '../../../shared/api/types'
-import { presentRunEvent } from '../../runs/runPresentation'
+import type { RunEventEnvelope, RunStatus } from '../../runs/types'
+import { presentRunEvent } from '../../runs/display'
 
 const props = defineProps<{
   events: RunEventEnvelope[]
@@ -46,7 +46,7 @@ const traceSummary = computed(() => {
             <span class="event-title">{{ item.title }}</span>
             <span v-if="item.meta" class="event-meta">{{ item.meta }}</span>
           </div>
-          <p v-if="item.detail">{{ item.detail }}</p>
+          <p v-if="item.detail" :class="{ 'is-code': item.detailCode }">{{ item.detail }}</p>
         </div>
       </div>
       <div v-if="items.length === 0" class="spine-item active">
@@ -215,6 +215,13 @@ const traceSummary = computed(() => {
   color: var(--ink-muted);
   font-size: 10.5px;
   line-height: 1.45;
+}
+
+.event-copy p.is-code {
+  overflow-wrap: anywhere;
+  color: var(--ink-soft);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
 }
 
 .event-meta {

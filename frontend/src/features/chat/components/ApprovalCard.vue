@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 
-import type { ApprovalRequest } from '../../../shared/api/types'
+import type { ApprovalRequest } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
 import { formatCommandArguments } from '../../permissions/commandDisplay'
 
@@ -15,7 +15,6 @@ const emit = defineEmits<{
   reject: []
 }>()
 
-const dialog = ref<HTMLElement | null>(null)
 const rejectButton = ref<HTMLButtonElement | null>(null)
 
 async function focusSafeAction(): Promise<void> {
@@ -27,19 +26,6 @@ function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') {
     event.preventDefault()
     rejectButton.value?.focus()
-    return
-  }
-  if (event.key !== 'Tab' || !dialog.value) return
-  const controls = [...dialog.value.querySelectorAll<HTMLElement>('button:not(:disabled)')]
-  if (controls.length === 0) return
-  const first = controls[0]
-  const last = controls.at(-1)
-  if (event.shiftKey && document.activeElement === first) {
-    event.preventDefault()
-    last?.focus()
-  } else if (!event.shiftKey && document.activeElement === last) {
-    event.preventDefault()
-    first?.focus()
   }
 }
 
@@ -48,31 +34,27 @@ watch(() => props.approval.id, () => void focusSafeAction())
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="approval-backdrop">
-      <section
-        ref="dialog"
-        class="approval-dialog"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="approval-title"
-        aria-describedby="approval-description"
-        @keydown="onKeydown"
-      >
-        <header class="approval-heading">
-          <span class="approval-mark" aria-hidden="true"><AppIcon name="shield" /></span>
-          <div>
-            <p class="eyebrow">需要人工确认</p>
-            <h2 id="approval-title">允许执行这项操作？</h2>
-          </div>
-        </header>
+  <div class="approval-zone">
+    <section
+      class="approval-card"
+      aria-labelledby="approval-title"
+      aria-describedby="approval-description"
+      @keydown="onKeydown"
+    >
+      <header class="approval-heading">
+        <span class="approval-mark" aria-hidden="true"><AppIcon name="shield" /></span>
+        <div class="approval-copy">
+          <p class="eyebrow">需要人工确认</p>
+          <h2 id="approval-title">允许执行这项操作？</h2>
+          <p id="approval-description" class="approval-reason">{{ approval.reason }}</p>
+        </div>
+        <span class="one-time-label">仅本次</span>
+      </header>
 
-        <p id="approval-description" class="approval-reason">{{ approval.reason }}</p>
-
+      <div class="approval-detail-grid">
         <div class="command-block">
           <div class="command-label">
             <span>{{ approval.tool_name === 'run_command' ? '待执行命令' : '待执行操作' }}</span>
-            <span>仅本次</span>
           </div>
           <pre v-if="approval.argv.length" aria-label="待执行命令的参数数组"><code>{{ formatCommandArguments(approval.argv) }}</code></pre>
           <p v-else class="action-summary">{{ approval.action_summary }}</p>
@@ -88,11 +70,12 @@ watch(() => props.approval.id, () => void focusSafeAction())
             <dd>只允许当前这一次操作</dd>
           </div>
         </dl>
+      </div>
 
+      <footer class="approval-footer">
         <p class="safety-note">
-          拒绝不会丢失会话；Agent 会收到拒绝结果并决定是否调整方案。
+          拒绝后 Agent 会收到结果并调整方案。
         </p>
-
         <div class="approval-actions">
           <button ref="rejectButton" class="approval-decision reject" type="button" :disabled="busy" @click="emit('reject')">
             拒绝
@@ -101,54 +84,56 @@ watch(() => props.approval.id, () => void focusSafeAction())
             {{ busy ? '正在处理…' : '允许本次操作' }}
           </button>
         </div>
-      </section>
-    </div>
-  </Teleport>
+      </footer>
+    </section>
+  </div>
 </template>
 
 <style scoped>
-.approval-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  background: rgb(15 23 42 / 52%);
-  backdrop-filter: blur(3px);
+.approval-zone {
+  position: relative;
+  z-index: 4;
+  flex: none;
+  padding: 12px 24px 18px;
+  background: linear-gradient(to bottom, rgb(245 247 250 / 20%), var(--canvas) 25%);
 }
 
-.approval-dialog {
-  width: min(600px, 100%);
-  max-height: calc(100dvh - 40px);
-  padding: 24px;
-  overflow-y: auto;
+.approval-card {
+  width: min(840px, 100%);
+  margin: 0 auto;
+  overflow: hidden;
   border: 1px solid var(--warning-border);
-  border-radius: 16px;
+  border-radius: 15px;
   background: var(--surface);
-  box-shadow: var(--shadow-dialog);
+  box-shadow: var(--shadow-composer);
 }
 
 .approval-heading {
   display: flex;
-  align-items: center;
-  gap: 13px;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 14px 16px 12px;
 }
 
 .approval-mark {
   display: grid;
-  width: 42px;
-  height: 42px;
+  width: 36px;
+  height: 36px;
   flex: none;
   place-items: center;
-  border-radius: 11px;
+  border-radius: 9px;
   color: var(--warning);
   background: var(--warning-soft);
 }
 
 .approval-mark :deep(svg) {
-  width: 22px;
-  height: 22px;
+  width: 18px;
+  height: 18px;
+}
+
+.approval-copy {
+  min-width: 0;
+  flex: 1;
 }
 
 .eyebrow,
@@ -162,73 +147,90 @@ h2,
 .eyebrow {
   color: var(--warning);
   font-family: var(--font-utility);
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 750;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 h2 {
-  margin-top: 1px;
-  font-size: 20px;
+  margin-top: 2px;
+  font-size: 16px;
   font-weight: 720;
   letter-spacing: -0.015em;
 }
 
 .approval-reason {
-  margin-top: 16px;
-  color: var(--ink-soft);
-  font-size: 14px;
-  line-height: 1.55;
+  margin-top: 4px;
+  color: var(--ink-muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.one-time-label {
+  flex: none;
+  margin-top: 2px;
+  padding: 4px 7px;
+  border: 1px solid var(--warning-border);
+  border-radius: 999px;
+  color: #8a570d;
+  background: var(--warning-soft);
+  font-family: var(--font-utility);
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.approval-detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(190px, 0.7fr);
+  gap: 10px;
+  padding: 0 16px 12px;
 }
 
 .command-block {
-  margin-top: 18px;
   overflow: hidden;
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: 9px;
   background: #111827;
 }
 
 .command-label {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 9px 12px;
+  padding: 7px 10px;
   border-bottom: 1px solid #2b3648;
   color: #9eacc0;
   font-family: var(--font-utility);
-  font-size: 10px;
-}
-
-.command-label span:last-child {
-  color: #e6bd70;
+  font-size: 9px;
 }
 
 pre,
 .action-summary {
   max-width: 100%;
+  max-height: 92px;
   margin: 0;
-  padding: 14px;
-  overflow-x: auto;
+  padding: 10px 12px;
+  overflow: auto;
   color: #e5edf8;
   font-family: var(--font-mono);
-  font-size: 12px;
-  line-height: 1.55;
+  font-size: 11px;
+  line-height: 1.45;
   white-space: pre-wrap;
   word-break: break-all;
 }
 
 .approval-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   gap: 8px;
-  margin: 14px 0 0;
+  margin: 0;
 }
 
 .approval-facts > div {
   min-width: 0;
-  padding: 10px 11px;
+  flex: 1;
+  padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 9px;
   background: var(--surface-subtle);
@@ -249,25 +251,36 @@ dd {
   white-space: nowrap;
 }
 
+.approval-footer {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px 11px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-subtle);
+}
+
 .safety-note {
-  margin-top: 14px;
+  min-width: 0;
+  flex: 1;
   color: var(--ink-muted);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 10px;
+  line-height: 1.4;
 }
 
 .approval-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  flex: none;
   gap: 10px;
-  margin-top: 20px;
 }
 
 .approval-decision {
-  min-height: 46px;
+  min-width: 112px;
+  min-height: 40px;
+  padding: 0 14px;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
-  font-size: 14px;
+  border-radius: 8px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -287,23 +300,38 @@ dd {
 }
 
 @media (max-width: 640px) {
-  .approval-backdrop {
-    align-items: end;
-    padding: 0;
+  .approval-zone {
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
 
-  .approval-dialog {
-    max-height: 92dvh;
-    padding: 20px 16px calc(18px + env(safe-area-inset-bottom));
-    border-radius: 16px 16px 0 0;
+  .approval-heading {
+    padding: 12px;
+  }
+
+  .approval-detail-grid {
+    grid-template-columns: 1fr;
+    padding: 0 12px 10px;
   }
 
   .approval-facts {
-    grid-template-columns: 1fr;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  h2 {
-    font-size: 18px;
+  .approval-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+
+  .approval-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .approval-decision {
+    min-width: 0;
   }
 }
 </style>

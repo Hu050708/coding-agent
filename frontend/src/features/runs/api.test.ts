@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { HttpClient } from '../../shared/api/http'
-import { createRunApi } from './runApi'
+import { createRunApi } from './api'
 
 describe('run API', () => {
   it('freezes permission and memory mode in the run request', async () => {

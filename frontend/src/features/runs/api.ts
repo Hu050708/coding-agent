@@ -1,9 +1,6 @@
 import { httpClient, type HttpClient } from '../../shared/api/http'
-import type {
-  ApprovalRequest,
-  PermissionMode,
-  RunSummary,
-} from '../../shared/api/types'
+import type { PermissionMode } from '../../shared/api/types'
+import type { ApprovalRequest, RunSummary } from './types'
 
 export interface CreateRunInput {
   content: string

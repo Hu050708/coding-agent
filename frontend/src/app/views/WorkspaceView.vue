@@ -2,8 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
-import { useConversationStore } from '../../features/conversations/conversationStore'
-import { useWorkspaceStore } from '../../features/workspaces/workspaceStore'
+import { useConversationStore } from '../../features/conversations/store'
+import { useWorkspaceStore } from '../../features/workspaces/store'
 import AppIcon from '../../shared/components/AppIcon.vue'
 
 defineEmits<{ openSidebar: [] }>()

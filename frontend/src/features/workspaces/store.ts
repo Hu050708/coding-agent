@@ -2,8 +2,8 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 
 import { localizedError } from '../../shared/api/http'
-import type { Workspace } from '../../shared/api/types'
-import { workspaceApi } from './workspaceApi'
+import type { Workspace } from './types'
+import { workspaceApi } from './api'
 
 export const useWorkspaceStore = defineStore('workspaces', () => {
   const items = ref<Workspace[]>([])

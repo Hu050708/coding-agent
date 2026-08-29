@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 
-import type { ChatMessage, RunSummary } from '../../../shared/api/types'
+import type { ChatMessage } from '../../conversations/types'
+import type { RunSummary } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
 import MessageContent from './MessageContent.vue'
 

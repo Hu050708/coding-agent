@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { RunSummary } from '../../../shared/api/types'
+import type { RunSummary } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
-import { presentRunOutcome } from '../../runs/runPresentation'
+import { presentRunOutcome } from '../../runs/display'
 
 const props = defineProps<{ run: RunSummary }>()
 const outcome = computed(() => presentRunOutcome(props.run))

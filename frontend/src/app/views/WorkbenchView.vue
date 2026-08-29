@@ -6,11 +6,11 @@ import ApprovalCard from '../../features/chat/components/ApprovalCard.vue'
 import ChatComposer from '../../features/chat/components/ChatComposer.vue'
 import ConversationHeader from '../../features/chat/components/ConversationHeader.vue'
 import MessageThread from '../../features/chat/components/MessageThread.vue'
-import RunInspector from '../../features/chat/components/RunInspector.vue'
-import { conversationApi } from '../../features/conversations/conversationApi'
-import { useConversationStore } from '../../features/conversations/conversationStore'
-import { useRunStore } from '../../features/runs/runStore'
-import { useWorkspaceStore } from '../../features/workspaces/workspaceStore'
+import RunDetails from '../../features/chat/components/RunDetails.vue'
+import { conversationApi } from '../../features/conversations/api'
+import { useConversationStore } from '../../features/conversations/store'
+import { useRunStore } from '../../features/runs/store'
+import { useWorkspaceStore } from '../../features/workspaces/store'
 import { localizedError } from '../../shared/api/http'
 import { healthApi } from '../../shared/api/healthApi'
 import type { HealthResponse, PermissionMode } from '../../shared/api/types'
@@ -157,7 +157,15 @@ onBeforeUnmount(() => {
 
       <template v-if="ready">
         <MessageThread :messages="conversations.messages" :run="runs.current" />
+        <ApprovalCard
+          v-if="runs.current?.pending_approval?.status === 'pending'"
+          :approval="runs.current.pending_approval"
+          :busy="actionBusy"
+          @approve="runs.decide('approve')"
+          @reject="runs.decide('reject')"
+        />
         <ChatComposer
+          v-else
           :disabled="!ready || serviceBlocked"
           :active="runs.active"
           :busy="actionBusy"
@@ -183,7 +191,7 @@ onBeforeUnmount(() => {
 
     <button v-if="inspectorOpen" class="inspector-scrim" type="button" aria-label="关闭运行检查器" @click="inspectorOpen = false" />
     <Transition name="inspector">
-      <RunInspector
+      <RunDetails
         v-if="inspectorOpen"
         :run="runs.current"
         :events="runs.events"
@@ -193,14 +201,6 @@ onBeforeUnmount(() => {
         @stop="runs.cancel"
       />
     </Transition>
-
-    <ApprovalCard
-      v-if="runs.current?.pending_approval?.status === 'pending'"
-      :approval="runs.current.pending_approval"
-      :busy="actionBusy"
-      @approve="runs.decide('approve')"
-      @reject="runs.decide('reject')"
-    />
   </section>
 </template>
 

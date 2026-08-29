@@ -100,10 +100,6 @@ watch(
         </button>
       </div>
     </div>
-    <p id="permission-boundary" class="boundary-copy">
-      <AppIcon name="shield" />
-      权限限定在当前工作区；危险、提权和工作区外操作始终禁止。运行使用当前 Windows 用户权限，并非系统沙箱。
-    </p>
   </div>
 </template>
 
@@ -228,7 +224,6 @@ textarea::placeholder {
 }
 
 .shortcut-hint {
-  margin-left: auto;
   color: var(--ink-faint);
   font-family: var(--font-utility);
   font-size: 9px;
@@ -243,6 +238,7 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  margin-left: auto;
   padding: 0 13px;
   border-radius: 9px;
   color: white;
@@ -275,27 +271,6 @@ textarea::placeholder {
   background: #f8dfe4;
 }
 
-.boundary-copy {
-  display: flex;
-  width: min(840px, 100%);
-  align-items: flex-start;
-  justify-content: center;
-  gap: 5px;
-  margin: 7px auto 0;
-  color: var(--ink-faint);
-  font-family: var(--font-utility);
-  font-size: 9.5px;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.boundary-copy :deep(svg) {
-  width: 12px;
-  height: 12px;
-  flex: none;
-  margin-top: 1px;
-}
-
 @media (max-width: 760px) {
   .composer-zone {
     padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
@@ -312,8 +287,7 @@ textarea::placeholder {
     padding: 7px;
   }
 
-  .shortcut-hint,
-  .boundary-copy {
+  .shortcut-hint {
     display: none;
   }
 

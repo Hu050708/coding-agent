@@ -3,10 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '../../shared/components/AppIcon.vue'
-import { useConversationStore } from '../conversations/conversationStore'
-import { useMemoryStore } from '../memory/memoryStore'
+import { useConversationStore } from '../conversations/store'
+import { useMemoryStore } from '../memory/store'
 import DirectoryBrowserDialog from './DirectoryBrowserDialog.vue'
-import { useWorkspaceStore } from './workspaceStore'
+import { useWorkspaceStore } from './store'
 
 defineProps<{ mobileOpen: boolean }>()
 const emit = defineEmits<{ closeMobile: [] }>()
@@ -156,15 +156,14 @@ onMounted(() => void workspaces.load())
     </nav>
 
     <div class="sidebar-footer">
+      <RouterLink class="footer-action" to="/evaluations" @click="emit('closeMobile')">
+        <AppIcon name="beaker" />
+        <span>评测结果</span>
+      </RouterLink>
       <button type="button" class="footer-action" :disabled="!routeWorkspaceId" @click="showMemory">
         <AppIcon name="memory" />
         <span>工作区记忆</span>
-        <span class="footer-hint">由你确认</span>
       </button>
-      <div class="security-boundary">
-        <AppIcon name="shield" />
-        <span>文件与命令权限限定在当前工作区</span>
-      </div>
     </div>
 
     <DirectoryBrowserDialog :open="browserOpen" @close="browserOpen = false" @select="addWorkspace" />
@@ -452,6 +451,7 @@ kbd {
   background: transparent;
   font-size: 13px;
   text-align: left;
+  text-decoration: none;
 }
 
 .footer-action:hover:not(:disabled) {
@@ -459,27 +459,9 @@ kbd {
   background: var(--sidebar-raised);
 }
 
-.footer-hint {
-  margin-left: auto;
-  color: var(--sidebar-muted);
-  font-size: 10px;
-}
-
-.security-boundary {
-  display: flex;
-  align-items: flex-start;
-  gap: 7px;
-  margin: 8px 9px 0;
-  color: var(--sidebar-muted);
-  font-size: 10px;
-  line-height: 1.45;
-}
-
-.security-boundary :deep(svg) {
-  width: 13px;
-  height: 13px;
-  flex: none;
-  margin-top: 1px;
+.footer-action.router-link-active {
+  color: white;
+  background: var(--sidebar-active);
 }
 
 @media (max-width: 900px) {

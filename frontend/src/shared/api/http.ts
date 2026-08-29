@@ -60,6 +60,8 @@ export function localizedError(error: unknown): string {
       run_not_found: '运行不存在，可能已被服务重启清理。',
       approval_stale: '这项审批已经失效，请刷新运行状态。',
       approval_not_pending: '这项审批已经处理。',
+      evaluation_run_not_found: '这份评测记录不存在或已经被移走。',
+      evaluation_report_invalid: '评测报告无法读取，请重新生成 benchmark 报告。',
       run_cancelling: '任务正在停止，不能继续审批。',
       validation_error: '提交内容不完整，请检查后重试。',
     }

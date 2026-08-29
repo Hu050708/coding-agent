@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { Conversation, RunSummary } from '../../../shared/api/types'
+import type { Conversation } from '../../conversations/types'
+import type { RunSummary } from '../../runs/types'
 import AppIcon from '../../../shared/components/AppIcon.vue'
 
 defineProps<{

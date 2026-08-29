@@ -1,11 +1,11 @@
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { Workspace } from '../../shared/api/types'
-import { workspaceApi } from './workspaceApi'
-import { useWorkspaceStore } from './workspaceStore'
+import type { Workspace } from './types'
+import { workspaceApi } from './api'
+import { useWorkspaceStore } from './store'
 
-vi.mock('./workspaceApi', () => ({
+vi.mock('./api', () => ({
   workspaceApi: {
     list: vi.fn(),
     create: vi.fn(),

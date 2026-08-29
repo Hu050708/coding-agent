@@ -3,7 +3,7 @@
 
 环境：Python 3.11、Conda、Docker Desktop、Node.js 22。仓库根目录名为 coding-agent。进入 backend，执行“conda env create -f environment.yml”和“conda activate coding-agent”，按 .env.example 在未入库的 .env 中配置 DEEPSEEK_API_KEY、允许根目录和 PostgreSQL 密码/URL。
 
-Web 运行：先在 backend 执行“docker compose --env-file .env -f deploy/compose.yml up -d”，启动独立的 coding-agent-postgres（127.0.0.1:5434）和数据卷；再执行“coding-agent-web”。另一终端进入 frontend，执行“npm ci”和“npm run dev”，访问 http://127.0.0.1:5173/。CLI 可脱离 Docker、数据库和 Web 运行：coding-agent --workspace <项目目录> "修复问题、补测试并验证"。
+Web 运行：在仓库根目录将 .env.docker.example 复制为未入库的 .env，填写 DeepSeek 密钥、URL 安全数据库密码和宿主机工作区路径，然后执行“docker compose up -d --build”。该命令启动 frontend、backend、postgres 三个容器，仅将 http://127.0.0.1:8080 暴露给本机浏览器；Alembic 在后端启动时自动迁移数据库。CLI 仍可脱离 Docker、数据库和 Web 运行：coding-agent --workspace <项目目录> "修复问题、补测试并验证"。
 
 特色：不使用 Agent 框架或 Agent SDK，自行实现 DeepSeek tool calling 的历史、解析、本地工具、循环终止、重试和预算。Web 支持受限工作区、持久会话、SSE 断线重放、审批、手动确认的长期记忆，以及 review/workspace/auto 三档后端权限；DENY 始终不能绕过。PostgreSQL 只保存可见消息和安全事件，不保存隐藏推理或完整工具输出。
 

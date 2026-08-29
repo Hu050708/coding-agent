@@ -15,6 +15,8 @@ FastAPI + Vue 工作台。模型负责选择工具；本项目自己维护上下
 coding-agent/
 ├─ backend/                 # Python、Agent 核心、FastAPI、PostgreSQL、测试与文档
 ├─ frontend/                # Vue 3、TypeScript、Vite、Pinia、Vue Router
+├─ compose.yml              # 前端、后端、PostgreSQL 三容器部署入口
+├─ DOCKER_DEPLOY.md         # Docker 部署、更新和排错说明
 ├─ README.md
 └─ .gitignore
 ```
@@ -60,6 +62,22 @@ npm ci
 ```powershell
 conda env update -n coding-agent -f environment.yml
 ```
+
+## Docker 三容器部署
+
+接收者只需安装 Docker Desktop 或 Docker Engine，不需要单独安装 Python、Conda、Node.js
+和 PostgreSQL。复制根目录环境模板，填写 DeepSeek 密钥、数据库密码和允许挂载的工作区：
+
+```powershell
+Copy-Item .env.docker.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+浏览器访问 <http://127.0.0.1:8080/>，API 文档位于
+<http://127.0.0.1:8080/api/docs>。正式 Compose 只向宿主机回环地址开放前端；后端和
+PostgreSQL 只在容器网络内通信。完整配置、数据卷、远程服务器访问和排错方法见
+[`DOCKER_DEPLOY.md`](DOCKER_DEPLOY.md)。
 
 ## 本机配置
 
@@ -157,12 +175,31 @@ CLI 只读取当前终端进程中的 `DEEPSEEK_API_KEY`，不会读取 `backend
 
 ```powershell
 Set-Location E:\code\coding-agent\backend
+$env:DEEPSEEK_API_KEY="你的实际密钥"
 python -m evaluation.run_benchmark --model deepseek-v4-flash --repeats 3
 ```
 
 系统会生成逐轮 JSON、汇总 JSON 和中文 Markdown 报告，包含调用次数、Token、耗时、
 工具失败、文件变化、终止原因和独立验收结果。详细说明见
 [`backend/evaluation/README.md`](backend/evaluation/README.md)。
+
+### 正式评测结果
+
+2026-08-29 在提交 `536c94158978afc68ab0a273635a94807bba5135` 上使用
+`deepseek-v4-flash` 完成三类任务各三轮的正式评测。评测开始时 Git 工作区干净，报告记录
+`source_dirty: false`。结果如下：
+
+- 工作区外独立验收：9/9；
+- Agent 端到端成功：9/9；
+- 最后一次修改后测试通过：9/9；
+- 内部检查与外部验收不一致：0 次；
+- 平均耗时 38.4 秒，中位耗时 40.9 秒，最长耗时 53.1 秒；
+- 平均 Token 112,847，中位 Token 119,789，最大 Token 169,134。
+
+固定保存的[中文评测报告](backend/docs/evaluation-results/benchmark-20260829T140452Z/BENCHMARK_REPORT.md)
+和[机器可读汇总](backend/docs/evaluation-results/benchmark-20260829T140452Z/summary.json)包含每轮的
+模型与工具调用、文件变化、修改后检查和 verifier 结果。该结果只用于描述本项目在固定合成
+任务上的表现，不声称具有统计显著性或能代表任意真实项目。
 
 ## 验证
 

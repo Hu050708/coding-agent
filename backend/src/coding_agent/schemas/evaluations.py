@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pydantic import Field
+
 from .base import ApiModel
 
 
@@ -16,6 +18,8 @@ class EvaluationTaskSummary(ApiModel):
     runs: int
     successes: int
     success_rate: float
+    end_to_end_successes: int | None = None
+    end_to_end_success_rate: float | None = None
 
 
 class EvaluationCheck(ApiModel):
@@ -29,6 +33,15 @@ class EvaluationVerification(ApiModel):
     exit_code: int | None
     checks: list[EvaluationCheck]
     error: str | None
+
+
+class EvaluationChangeCheck(ApiModel):
+    status: str
+    change_version: int
+    checked_version: int | None
+    check_kind: str | None
+    tool_sequence: int | None
+    exit_code: int | None
 
 
 class EvaluationAgentSummary(ApiModel):
@@ -47,6 +60,7 @@ class EvaluationAgentSummary(ApiModel):
     tool_counts: dict[str, int]
     error_counts: dict[str, int]
     repeat_warnings: int
+    change_check: EvaluationChangeCheck | None = None
     trace_file: str | None
 
 
@@ -98,6 +112,9 @@ class EvaluationRunListResponse(ApiModel):
 
 class EvaluationRunResponse(EvaluationRunListItem):
     classifications: dict[str, int]
+    change_check_statuses: dict[str, int] = Field(default_factory=dict)
+    current_checks: int = 0
+    check_verifier_mismatches: int = 0
     trials: list[EvaluationTrial]
 
 

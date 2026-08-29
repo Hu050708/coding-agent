@@ -1,0 +1,97 @@
+name: coding-agent
+
+services:
+  postgres:
+    image: ${CODING_AGENT_POSTGRES_IMAGE:-pgvector/pgvector:0.8.6-pg17-bookworm}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: coding_agent
+      POSTGRES_USER: coding_agent
+      POSTGRES_PASSWORD: ${CODING_AGENT_POSTGRES_PASSWORD:?Set CODING_AGENT_POSTGRES_PASSWORD in the root .env file}
+    volumes:
+      - coding_agent_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coding_agent -d coding_agent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - coding_agent_internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      args:
+        PYTHON_IMAGE: ${CODING_AGENT_PYTHON_IMAGE:-python:3.12-slim-bookworm}
+        APP_UID: ${CODING_AGENT_UID:-1000}
+        APP_GID: ${CODING_AGENT_GID:-1000}
+    restart: unless-stopped
+    init: true
+    environment:
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:?Set DEEPSEEK_API_KEY in the root .env file}
+      CODING_AGENT_BASE_URL: ${CODING_AGENT_BASE_URL:-https://api.deepseek.com}
+      CODING_AGENT_MODEL: ${CODING_AGENT_MODEL:-deepseek-v4-flash}
+      CODING_AGENT_DATABASE_URL: postgresql+psycopg://coding_agent:${CODING_AGENT_POSTGRES_PASSWORD}@postgres:5432/coding_agent
+      CODING_AGENT_ALLOWED_ROOT: /workspaces
+      CODING_AGENT_DATA_DIR: /app/data
+      CODING_AGENT_BENCHMARK_RUNS_DIR: /app/evaluation-results
+      CODING_AGENT_HOST: 0.0.0.0
+      CODING_AGENT_WEB_PORT: 8000
+    volumes:
+      - type: bind
+        source: ${CODING_AGENT_WORKSPACE_PATH:?Set CODING_AGENT_WORKSPACE_PATH in the root .env file}
+        target: /workspaces
+      - coding_agent_runtime_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).read()
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - coding_agent_internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_IMAGE: ${CODING_AGENT_NODE_IMAGE:-node:22-alpine}
+        NGINX_IMAGE: ${CODING_AGENT_NGINX_IMAGE:-nginx:1.30-alpine}
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${CODING_AGENT_HTTP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - coding_agent_internal
+
+networks:
+  coding_agent_internal:
+    driver: bridge
+
+volumes:
+  coding_agent_postgres_data:
+  coding_agent_runtime_data:

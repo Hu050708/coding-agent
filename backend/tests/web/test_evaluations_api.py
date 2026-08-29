@@ -22,10 +22,24 @@ def _summary() -> dict[str, object]:
         "total_trials": 0,
         "verified_successes": 0,
         "verified_success_rate": 0.0,
+        "end_to_end_successes": 0,
+        "end_to_end_success_rate": 0.0,
         "classifications": {},
+        "change_check_statuses": {},
+        "current_checks": 0,
+        "check_verifier_mismatches": 0,
         "duration_seconds": {"mean": 0.0, "median": 0.0, "maximum": 0.0},
         "total_tokens": {"mean": 0.0, "median": 0.0, "maximum": 0.0},
-        "tasks": {},
+        "tasks": {
+            "category_filter": {
+                "title": "类别筛选",
+                "runs": 0,
+                "successes": 0,
+                "success_rate": 0.0,
+                "end_to_end_successes": 0,
+                "end_to_end_success_rate": 0.0,
+            }
+        },
         "trials": [],
     }
 
@@ -50,5 +64,7 @@ def test_evaluation_api_lists_and_reads_summary(tmp_path) -> None:
     assert detail.status_code == 200
     assert detail.json()["model_requested"] == "deepseek-v4-flash"
     assert detail.json()["end_to_end_successes"] == 0
+    assert detail.json()["tasks"]["category_filter"]["end_to_end_successes"] == 0
+    assert detail.json()["current_checks"] == 0
     assert missing.status_code == 404
     assert missing.json()["error"]["code"] == "evaluation_run_not_found"

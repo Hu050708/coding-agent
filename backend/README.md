@@ -83,6 +83,9 @@ coding-agent --workspace E:\code\your-project "请理解一下当前项目"
 
 ### Web 服务
 
+需要交付给其他机器时，推荐使用仓库根目录的三容器方案，参见
+[`../DOCKER_DEPLOY.md`](../DOCKER_DEPLOY.md)。以下步骤保留为源码开发方式。
+
 请按以下顺序启动各组件。
 
 1. 创建专用 PostgreSQL 服务：

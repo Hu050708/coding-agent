@@ -7,7 +7,7 @@ import json
 
 import pytest
 
-from coding_agent.agents.diagnostics import TraceWriter, summarize_argv
+from coding_agent.agents.diagnostics import TraceWriter, summarize_argv, summarize_target
 
 
 def test_trace_uses_allowlist_and_removes_sensitive_fields(tmp_path):
@@ -59,3 +59,9 @@ def test_argv_summary_is_lossy():
     assert "private" not in summary
     assert "source.py" in summary
     assert summary.startswith("python.exe --token")
+
+
+def test_target_summary_keeps_relative_paths_and_hides_credentials():
+    assert summarize_target("src/hello.py") == "src/hello.py"
+    assert summarize_target("../outside.py") is None
+    assert summarize_target("config/.env") == "<protected>"

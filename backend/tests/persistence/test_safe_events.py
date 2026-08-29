@@ -83,3 +83,37 @@ def test_repeated_tool_event_keeps_only_safe_progress_fields() -> None:
         "repeat_count": 3,
         "progress_warning": True,
     }
+
+
+def test_tool_events_keep_only_bounded_display_summaries() -> None:
+    started = sanitize_run_event(
+        "tool.started",
+        {
+            "sequence": 1,
+            "tool_name": "run_command",
+            "argv_summary": "python hello.py",
+            "argv": ["python", "hello.py", "secret"],
+        },
+    )
+    completed = sanitize_run_event(
+        "tool.completed",
+        {
+            "sequence": 1,
+            "tool_name": "write_file",
+            "ok": True,
+            "result_summary": "创建 hello.py · 428 B",
+            "raw_result": "file contents",
+        },
+    )
+
+    assert started == {
+        "sequence": 1,
+        "tool_name": "run_command",
+        "argv_summary": "python hello.py",
+    }
+    assert completed == {
+        "sequence": 1,
+        "tool_name": "write_file",
+        "ok": True,
+        "result_summary": "创建 hello.py · 428 B",
+    }

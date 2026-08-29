@@ -4,6 +4,7 @@ from .errors import ApplicationError
 from .filesystem_browser import DirectoryBrowser
 from .catalog_service import CatalogService
 from .container import ApplicationServices
+from .evaluation_service import EvaluationReportService
 from .memory_service import WorkspaceMemoryService
 from .run_service import ConversationRunService
 
@@ -13,5 +14,6 @@ __all__ = [
     "CatalogService",
     "ConversationRunService",
     "DirectoryBrowser",
+    "EvaluationReportService",
     "WorkspaceMemoryService",
 ]

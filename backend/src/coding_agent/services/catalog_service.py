@@ -15,7 +15,12 @@ from coding_agent.agents.security import WorkspacePolicy, WorkspacePolicyError
 
 from .errors import ApplicationError
 from .filesystem_browser import DirectoryBrowser
-from .presenters import conversation_view, message_view, workspace_view
+from .presenters import (
+    conversation_view,
+    dated_conversation_title,
+    message_view,
+    workspace_view,
+)
 
 
 class CatalogService:
@@ -132,7 +137,7 @@ class CatalogService:
         """在指定工作区下创建带默认运行设置的会话。
 
         :param workspace_id: 所属工作区 ID。
-        :param title: 可选标题；省略时使用“新会话”。
+        :param title: 可选标题；省略时使用带创建日期的默认标题。
         :param default_permission_mode: 新运行的默认权限模式。
         :param use_memory: 新运行默认是否使用项目记忆。
         :return: 新会话公开视图。
@@ -143,7 +148,7 @@ class CatalogService:
         try:
             record = self.persistence.create_conversation(
                 workspace_id=workspace_id,
-                title=title or "新会话",
+                title=title or dated_conversation_title(),
                 default_permission_mode=default_permission_mode,
                 use_memory=use_memory,
             )

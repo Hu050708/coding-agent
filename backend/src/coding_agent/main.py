@@ -118,6 +118,7 @@ def create_app(
             persistence=effective_persistence,
             manager=effective_manager,
             workspace_policy=workspace_policy,
+            benchmark_runs_dir=effective_settings.benchmark_runs_dir,
         )
         # 第三步：所有依赖挂载到 app.state 后才开始接收请求。
         yield

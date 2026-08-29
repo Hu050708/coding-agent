@@ -49,6 +49,10 @@ class AppSettings(BaseSettings):
     allowed_root: Path = Path(r"E:\code")
     # 日志、追踪等本地运行数据的保存目录。
     data_dir: Path = Field(default_factory=default_data_dir)
+    # 可复现评测器生成报告的只读目录。
+    benchmark_runs_dir: Path = (
+        Path(__file__).resolve().parents[3] / "tmp" / "benchmark-runs"
+    )
     # 调用模型服务时使用的模型名称。
     model: str = DEFAULT_MODEL
     # OpenAI 兼容模型接口的基础 URL。

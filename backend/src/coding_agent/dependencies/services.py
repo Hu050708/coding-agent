@@ -8,6 +8,7 @@ from coding_agent.services import (
     ApplicationServices,
     CatalogService,
     ConversationRunService,
+    EvaluationReportService,
     WorkspaceMemoryService,
 )
 from coding_agent.settings import AppSettings
@@ -85,11 +86,18 @@ def get_workspace_memory_service(request: Request) -> WorkspaceMemoryService:
     return get_application_services(request).memories
 
 
+def get_evaluation_report_service(request: Request) -> EvaluationReportService:
+    """取得负责读取本地 benchmark 汇总的只读服务。"""
+
+    return get_application_services(request).evaluations
+
+
 __all__ = [
     "get_application_services",
     "get_catalog_service",
     "get_conversation_run_service",
     "get_database",
+    "get_evaluation_report_service",
     "get_run_manager",
     "get_settings",
     "get_workspace_memory_service",

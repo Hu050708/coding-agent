@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -54,7 +55,9 @@ def conversation_view(
     return {
         "id": record.id,
         "workspace_id": record.workspace_id,
-        "title": record.title,
+        "title": dated_conversation_title(record.created_at)
+        if record.title == "新会话"
+        else record.title,
         "default_permission_mode": record.default_permission_mode,
         "use_memory": record.use_memory,
         "active_run_id": (
@@ -65,6 +68,18 @@ def conversation_view(
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }
+
+
+def dated_conversation_title(created_at: datetime | None = None) -> str:
+    """生成包含本地创建日期和时间的默认会话标题。
+
+    :param created_at: 可选 UTC 创建时间；省略时使用当前时间。
+    :return: 形如“新会话20260829-142047”的用户可见标题。
+    """
+
+    value = created_at or datetime.now(timezone.utc)
+    china_time = value.astimezone(timezone(timedelta(hours=8)))
+    return f"新会话{china_time:%Y%m%d-%H%M%S}"
 
 
 def message_view(record: MessageRecord) -> dict[str, Any]:
@@ -123,6 +138,7 @@ def memory_view(record: MemoryEntryRecord) -> dict[str, Any]:
 
 __all__ = [
     "conversation_view",
+    "dated_conversation_title",
     "event_view",
     "memory_view",
     "message_view",

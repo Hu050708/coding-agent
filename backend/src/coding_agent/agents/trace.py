@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
 import re
 import threading
 from typing import Any, Mapping, TextIO
@@ -38,6 +38,7 @@ EVENT_FIELDS: dict[str, frozenset[str]] = {
             "truncated",
             "repeat_count",
             "progress_warning",
+            "result_summary",
         }
     ),
     "run_finished": frozenset(
@@ -69,18 +70,55 @@ def summarize_argv(argv: list[str] | tuple[str, ...], *, max_chars: int = 160) -
     """
 
     pieces: list[str] = []
+    previous = ""
     for index, raw in enumerate(argv[:12]):
         value = str(raw)
         if index == 0:
             piece = Path(value).name or "<executable>"
         elif value.startswith("-"):
             piece = value.split("=", 1)[0]
+        elif previous == "-m" and re.fullmatch(r"[A-Za-z0-9_.-]+", value):
+            piece = value
+        elif Path(value).suffix and re.fullmatch(r"[A-Za-z0-9_.\\/ -]+", value):
+            piece = Path(value).name
         else:
             piece = Path(value).name if ("/" in value or "\\" in value) else "<arg>"
         pieces.append(piece[:48])
+        previous = value
     if len(argv) > 12:
         pieces.append("…")
     return " ".join(pieces)[:max_chars]
+
+
+def summarize_target(value: Any, *, max_chars: int = 200) -> str | None:
+    """返回可持久化的工作区相对目标标签。
+
+    :param value: 工具参数或工具结果中的候选路径。
+    :param max_chars: 标签允许包含的最大字符数。
+    :return: 安全相对路径、``<protected>`` 或 None。
+    """
+
+    if not isinstance(value, str) or not value or len(value) > 1_024:
+        return None
+    if any(ord(character) < 32 for character in value):
+        return None
+    windows = PureWindowsPath(value)
+    posix = PurePosixPath(value.replace("\\", "/"))
+    if windows.drive or windows.root or windows.anchor or posix.is_absolute():
+        return None
+    parts = tuple(part for part in posix.parts if part not in {"", "."})
+    if ".." in parts:
+        return None
+    lowered = {part.casefold() for part in parts}
+    if any(
+        part == ".env"
+        or part.startswith(".env.")
+        or Path(part).suffix in {".key", ".pem", ".p12", ".pfx", ".der"}
+        for part in lowered
+    ):
+        return "<protected>"
+    normalized = PurePosixPath(*parts).as_posix() if parts else "."
+    return normalized[:max_chars]
 
 
 def _safe_usage(value: Any) -> dict[str, int]:

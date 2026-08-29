@@ -176,6 +176,8 @@ def test_agent_preserves_reasoning_and_tool_calls_across_rounds():
     ]
     model_events = [fields for event, fields in trace.events if event == "model_completed"]
     assert model_events[0]["response_model"] == "DeepSeek-V4-Flash-0731"
+    tool_started = [fields for event, fields in trace.events if event == "tool_started"]
+    assert tool_started[0]["target"] == "a.py"
     serialized_trace = repr(trace.events)
     assert "inspect and fix" not in serialized_trace
     assert "tool reasoning" not in serialized_trace

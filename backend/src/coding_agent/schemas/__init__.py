@@ -24,6 +24,7 @@ from .runs import (
     RunResponse,
 )
 from .system import HealthResponse
+from .evaluations import EvaluationRunListResponse, EvaluationRunResponse
 from .workspaces import (
     DirectoryBrowseResponse,
     DirectoryEntryResponse,
@@ -42,6 +43,8 @@ __all__ = [
     "ConversationUpdateRequest",
     "DirectoryBrowseResponse",
     "DirectoryEntryResponse",
+    "EvaluationRunListResponse",
+    "EvaluationRunResponse",
     "HealthResponse",
     "MessageListResponse",
     "MessageResponse",

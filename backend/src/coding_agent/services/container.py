@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 from coding_agent.repository import PersistenceService
 from coding_agent.agents.runtime.run_manager import RunManager
 from coding_agent.agents.security import WorkspacePolicy
 
 from .catalog_service import CatalogService
+from .evaluation_service import EvaluationReportService
 from .memory_service import WorkspaceMemoryService
 from .run_service import ConversationRunService
 
@@ -23,6 +25,8 @@ class ApplicationServices:
     runs: ConversationRunService
     # 工作区长期记忆服务。
     memories: WorkspaceMemoryService
+    # 本地 benchmark 结果只读服务。
+    evaluations: EvaluationReportService
 
     @classmethod
     def build(
@@ -31,6 +35,7 @@ class ApplicationServices:
         persistence: PersistenceService,
         manager: RunManager,
         workspace_policy: WorkspacePolicy,
+        benchmark_runs_dir: Path,
     ) -> "ApplicationServices":
         """使用共享基础设施依赖组装全部业务服务。
 
@@ -44,6 +49,7 @@ class ApplicationServices:
             catalog=CatalogService(persistence, workspace_policy),
             runs=ConversationRunService(persistence, manager),
             memories=WorkspaceMemoryService(persistence),
+            evaluations=EvaluationReportService(benchmark_runs_dir),
         )
 
 

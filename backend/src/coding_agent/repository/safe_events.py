@@ -1,7 +1,8 @@
 """对持久化、可重放运行事件执行防御性投影。
 
 实时事件缓冲区可能携带额外的瞬时值。本模块是写入 ``run_events`` 的唯一入口，
-会主动丢弃文件路径、命令参数、模型响应正文、工具输出和供应商元数据。
+只允许工作区相对目标和有损命令摘要，主动丢弃绝对路径、完整命令参数、文件正文、
+工具输出和供应商元数据。
 """
 
 from __future__ import annotations
@@ -42,7 +43,9 @@ _SCALAR_KEYS: dict[str, frozenset[str]] = {
             "retry_count",
         }
     ),
-    "tool.started": frozenset({"sequence", "tool_name"}),
+    "tool.started": frozenset(
+        {"sequence", "tool_name", "target", "argv_summary"}
+    ),
     "tool.completed": frozenset(
         {
             "sequence",
@@ -54,6 +57,7 @@ _SCALAR_KEYS: dict[str, frozenset[str]] = {
             "truncated",
             "repeat_count",
             "progress_warning",
+            "result_summary",
         }
     ),
     "approval.required": frozenset({"run_id"}),

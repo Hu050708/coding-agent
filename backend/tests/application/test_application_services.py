@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from uuid import uuid4
@@ -67,6 +68,7 @@ def application_stack(tmp_path):
         persistence=persistence,
         manager=manager,
         workspace_policy=WorkspacePolicy(allowed_root),
+        benchmark_runs_dir=tmp_path / "benchmark-runs",
     )
     try:
         yield services, persistence, runner, allowed_root
@@ -104,6 +106,8 @@ def test_catalog_registers_workspaces_and_updates_conversation(application_stack
     services, _persistence, _runner, root = application_stack
     workspace = _workspace(services, root, "alpha")
     conversation = _conversation(services, str(workspace["id"]))
+
+    assert re.fullmatch(r"新会话\d{8}-\d{6}", conversation["title"])
 
     updated = services.catalog.update_conversation(
         str(conversation["id"]),

@@ -26,6 +26,7 @@ from coding_agent.agents.contracts import (
     TraceEmitter,
 )
 from coding_agent.agents.context import AgentContext
+from coding_agent.agents.diagnostics import summarize_argv, summarize_target
 from coding_agent.agents.progress import RepeatedToolExchangeDetector
 from coding_agent.agents.tool_protocol import (
     add_progress_warning as _add_progress_warning,
@@ -44,6 +45,63 @@ DEFAULT_SYSTEM_PROMPT = """你是一个本地编程智能体。仅使用提供�
 """
 
 _UNKNOWN_TOOL_NAME = "unknown_tool"
+_PATH_TOOLS = frozenset({"list_files", "read_file", "search_text", "write_file", "replace_text"})
+
+
+def _tool_started_display_fields(
+    tool_name: str,
+    arguments: Mapping[str, Any],
+) -> dict[str, str]:
+    """从已解析工具参数生成可持久化的有损操作摘要。"""
+
+    if tool_name == "run_command":
+        argv = arguments.get("argv")
+        if isinstance(argv, list) and all(isinstance(item, str) for item in argv):
+            summary = summarize_argv(argv)
+            return {"argv_summary": summary} if summary else {}
+        return {}
+    if tool_name in _PATH_TOOLS:
+        target = summarize_target(arguments.get("path", "."))
+        return {"target": target} if target else {}
+    return {}
+
+
+def _tool_result_summary(tool_name: str, result: str) -> str | None:
+    """从工具结果提取不含正文和命令输出的事实摘要。"""
+
+    try:
+        payload = _strict_json_object(result)
+    except (TypeError, ValueError, RecursionError):
+        return None
+    if payload.get("ok") is not True:
+        return None
+    raw_data = payload.get("data")
+    raw_meta = payload.get("meta")
+    data = raw_data if isinstance(raw_data, Mapping) else {}
+    meta = raw_meta if isinstance(raw_meta, Mapping) else {}
+    target = summarize_target(data.get("path"))
+    if tool_name == "write_file" and target:
+        size = meta.get("size_bytes")
+        suffix = f" · {size:,} B" if isinstance(size, int) and not isinstance(size, bool) else ""
+        return f"创建 {target}{suffix}"
+    if tool_name == "replace_text" and target:
+        replacements = data.get("replacements")
+        suffix = f" · {replacements} 处替换" if isinstance(replacements, int) else ""
+        return f"修改 {target}{suffix}"
+    if tool_name == "read_file" and target:
+        lines = meta.get("total_lines")
+        suffix = f" · {lines} 行" if isinstance(lines, int) else ""
+        return f"读取 {target}{suffix}"
+    if tool_name == "list_files":
+        returned = meta.get("returned")
+        return f"列出 {returned} 项" if isinstance(returned, int) else None
+    if tool_name == "search_text":
+        returned = meta.get("returned")
+        return f"找到 {returned} 处匹配" if isinstance(returned, int) else None
+    if tool_name == "run_command":
+        exit_code = data.get("exit_code")
+        return f"命令退出码 {exit_code}" if isinstance(exit_code, int) else None
+    return None
 
 
 def _function_tool_names(schemas: Any) -> frozenset[str]:
@@ -412,12 +470,6 @@ class Agent:
                 tool_calls += 1
                 sequence = tool_calls
                 tool_started = self._clock()
-                self._emit(
-                    "tool_started",
-                    run_id=run_id,
-                    sequence=sequence,
-                    tool=trace_tool_name,
-                )
 
                 if not result:
                     try:
@@ -429,40 +481,54 @@ class Agent:
                         )
                     else:
                         parsed_arguments = arguments
-                        remaining = self.config.wall_time_seconds - (
-                            self._clock() - started_at
+
+                started_fields: dict[str, Any] = {
+                    "run_id": run_id,
+                    "sequence": sequence,
+                    "tool": trace_tool_name,
+                }
+                if parsed_arguments is not None:
+                    started_fields.update(
+                        _tool_started_display_fields(trace_tool_name, parsed_arguments)
+                    )
+                self._emit("tool_started", **started_fields)
+
+                if not result and parsed_arguments is not None:
+                    arguments = parsed_arguments
+                    remaining = self.config.wall_time_seconds - (
+                        self._clock() - started_at
+                    )
+                    if remaining <= 0:
+                        stop_after_batch = (
+                            AgentStatus.BUDGET_EXHAUSTED,
+                            TerminationReason.WALL_TIME_EXCEEDED,
                         )
-                        if remaining <= 0:
+                        result = _tool_error(
+                            "wall_time_exceeded",
+                            "run wall-time budget exhausted",
+                        )
+                    else:
+                        try:
+                            result = self.registry.execute(
+                                call.name,
+                                arguments,
+                                timeout_seconds=remaining,
+                            )
+                        except KeyboardInterrupt:
                             stop_after_batch = (
-                                AgentStatus.BUDGET_EXHAUSTED,
-                                TerminationReason.WALL_TIME_EXCEEDED,
+                                AgentStatus.CANCELLED,
+                                TerminationReason.USER_CANCELLED,
                             )
                             result = _tool_error(
-                                "wall_time_exceeded",
-                                "run wall-time budget exhausted",
+                                "user_cancelled",
+                                "tool call cancelled by user",
                             )
-                        else:
-                            try:
-                                result = self.registry.execute(
-                                    call.name,
-                                    arguments,
-                                    timeout_seconds=remaining,
-                                )
-                            except KeyboardInterrupt:
-                                stop_after_batch = (
-                                    AgentStatus.CANCELLED,
-                                    TerminationReason.USER_CANCELLED,
-                                )
-                                result = _tool_error(
-                                    "user_cancelled",
-                                    "tool call cancelled by user",
-                                )
-                            except Exception:
-                                result = _tool_error(
-                                    "internal_tool_error",
-                                    "tool registry raised an unexpected error",
-                                )
-                        result = _normalize_tool_result(result)
+                        except Exception:
+                            result = _tool_error(
+                                "internal_tool_error",
+                                "tool registry raised an unexpected error",
+                            )
+                    result = _normalize_tool_result(result)
 
                 if parsed_arguments is not None:
                     observation = repetition_detector.observe(
@@ -497,6 +563,9 @@ class Agent:
                     completed_fields["repeat_count"] = repeat_count
                 if progress_warning:
                     completed_fields["progress_warning"] = True
+                result_summary = _tool_result_summary(trace_tool_name, result)
+                if result_summary:
+                    completed_fields["result_summary"] = result_summary
                 self._emit(
                     "tool_completed",
                     **completed_fields,

@@ -159,3 +159,44 @@ def test_model_final_cannot_inject_terminal_escape_sequences(tmp_path, monkeypat
     assert code == cli.EXIT_SUCCESS
     assert "\x1b" not in stdout.getvalue()
     assert "\\u001b" in stdout.getvalue()
+
+
+def test_model_final_is_safe_for_gbk_terminal(tmp_path, monkeypatch):
+    class FakeAdapter:
+        def __init__(self, **kwargs):
+            pass
+
+    class FakeRegistry:
+        def __init__(self, workspace, **kwargs):
+            pass
+
+    class FakeAgent:
+        def __init__(self, adapter, registry, **kwargs):
+            pass
+
+        def run(self, task):
+            return SimpleNamespace(
+                status=AgentStatus.MODEL_FINISHED,
+                reason=TerminationReason.MODEL_FINAL,
+                final_content="任务完成 ✅",
+                model_calls=1,
+                tool_calls=0,
+                verified="unknown",
+            )
+
+    monkeypatch.setattr(cli, "DeepSeekAdapter", FakeAdapter)
+    monkeypatch.setattr(cli, "ToolRegistry", FakeRegistry)
+    monkeypatch.setattr(cli, "Agent", FakeAgent)
+    raw = io.BytesIO()
+    stdout = io.TextIOWrapper(raw, encoding="gbk", errors="strict")
+
+    code = cli.run_cli(
+        _options(tmp_path, "--no-trace"),
+        environ={"DEEPSEEK_API_KEY": "secret"},
+        stdout=stdout,
+        stderr=io.StringIO(),
+    )
+    stdout.flush()
+
+    assert code == cli.EXIT_SUCCESS
+    assert raw.getvalue().decode("gbk").splitlines() == ["任务完成 \\u2705"]

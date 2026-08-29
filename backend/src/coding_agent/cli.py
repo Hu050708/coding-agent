@@ -190,6 +190,16 @@ def _terminal_safe(text: str) -> str:
     return "".join(rendered)
 
 
+def _write_terminal(stream: TextIO, text: str) -> None:
+    """按当前终端编码输出文本，无法编码的字符显示为 Unicode 转义。"""
+
+    rendered = _terminal_safe(text)
+    encoding = getattr(stream, "encoding", None)
+    if encoding:
+        rendered = rendered.encode(encoding, errors="backslashreplace").decode(encoding)
+    stream.write(rendered)
+
+
 def run_cli(
     options: argparse.Namespace,
     *,
@@ -267,12 +277,14 @@ def run_cli(
 
     # 第四步：仅向 stdout 输出终端安全的最终内容，摘要和状态写入 stderr。
     if result.final_content:
-        stdout.write(_terminal_safe(result.final_content.rstrip()) + "\n")
+        _write_terminal(stdout, result.final_content.rstrip() + "\n")
     status = result.status.value if hasattr(result.status, "value") else str(result.status)
     reason = result.reason.value if hasattr(result.reason, "value") else str(result.reason)
+    change_status = getattr(getattr(result, "change_check", None), "status", "unknown")
     stderr.write(
         f"Coding Agent finished: status={status}, reason={reason}, "
-        f"model_calls={result.model_calls}, tool_calls={result.tool_calls}, verified={result.verified}\n"
+        f"model_calls={result.model_calls}, tool_calls={result.tool_calls}, "
+        f"change_check={change_status}, verified={result.verified}\n"
     )
     return EXIT_SUCCESS if result.status == AgentStatus.MODEL_FINISHED else EXIT_RUN_FAILED
 

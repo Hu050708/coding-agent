@@ -10,6 +10,11 @@ const route = useRoute()
 const router = useRouter()
 const conversations = useConversationStore()
 const sidebarOpen = ref(false)
+const workspaceSidebar = ref<{ openBrowser(): void } | null>(null)
+
+function addWorkspace(): void {
+  workspaceSidebar.value?.openBrowser()
+}
 
 async function onGlobalKeydown(event: KeyboardEvent): Promise<void> {
   if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== 'n') return
@@ -28,11 +33,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 
 <template>
   <div class="app-shell">
-    <WorkspaceSidebar :mobile-open="sidebarOpen" @close-mobile="sidebarOpen = false" />
+    <WorkspaceSidebar ref="workspaceSidebar" :mobile-open="sidebarOpen" @close-mobile="sidebarOpen = false" />
     <button v-if="sidebarOpen" class="sidebar-scrim" type="button" aria-label="关闭侧栏" @click="sidebarOpen = false" />
     <main class="app-main">
       <RouterView v-slot="{ Component }">
-        <component :is="Component" @open-sidebar="sidebarOpen = true" />
+        <component :is="Component" @open-sidebar="sidebarOpen = true" @add-workspace="addWorkspace" />
       </RouterView>
     </main>
     <MemoryDrawer />
@@ -50,7 +55,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onGlobalKeydown))
 .app-main {
   min-width: 0;
   flex: 1;
-  background: var(--surface);
+  background: var(--canvas);
 }
 
 .sidebar-scrim {

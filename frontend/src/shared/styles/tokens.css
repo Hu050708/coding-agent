@@ -1,43 +1,62 @@
 :root {
   color-scheme: light;
 
+  --canvas: #f5f7fa;
   --surface: #ffffff;
-  --surface-subtle: #f7f8fa;
-  --surface-hover: #eef1f5;
-  --sidebar: #f5f6f8;
-  --sidebar-active: #e9edf3;
-  --user-message: #f3f5f8;
+  --surface-subtle: #f7f9fb;
+  --surface-hover: #edf1f5;
+  --surface-raised: #ffffff;
+  --sidebar: #111827;
+  --sidebar-raised: #182233;
+  --sidebar-active: #243149;
+  --sidebar-line: #2a3649;
+  --sidebar-ink: #f8fafc;
+  --sidebar-muted: #9aa8ba;
+  --user-message: #eef3fb;
 
-  --ink: #1f2530;
-  --ink-soft: #444d5c;
-  --ink-muted: #707a89;
-  --ink-faint: #9aa3af;
+  --ink: #18202b;
+  --ink-soft: #465263;
+  --ink-muted: #647184;
+  --ink-faint: #8994a3;
 
-  --line: #e2e5e9;
-  --line-strong: #cdd2d9;
-  --activity-line: #bdcbe2;
+  --line: #e0e5eb;
+  --line-strong: #cbd3dd;
+  --activity-line: #c5d0df;
 
-  --accent: #3567d6;
-  --accent-strong: #2855bd;
-  --accent-border: #7092df;
+  --accent: #315fcc;
+  --accent-strong: #244cae;
+  --accent-border: #7093e4;
   --accent-soft: #e8eefc;
 
-  --success: #23785f;
-  --warning: #ad6b19;
-  --warning-border: #dfc08d;
-  --warning-soft: #fcf5e8;
-  --danger: #b8474e;
-  --danger-border: #e3b9bc;
-  --danger-soft: #fbefef;
+  --success: #147a5a;
+  --success-soft: #e8f5ef;
+  --warning: #925809;
+  --warning-border: #d9b778;
+  --warning-soft: #fcf4e5;
+  --danger: #b33745;
+  --danger-border: #dfb1b7;
+  --danger-soft: #fbecef;
 
-  --font-body: "Segoe UI Variable Text", "Segoe UI", Arial, sans-serif;
-  --font-display: Bahnschrift, "Segoe UI Variable Display", "Segoe UI", sans-serif;
-  --font-utility: "Segoe UI Variable Small", "Segoe UI", Arial, sans-serif;
+  --font-body: "Segoe UI Variable Text", "Microsoft YaHei UI", "Segoe UI", Arial, sans-serif;
+  --font-display: "Segoe UI Variable Display", "Microsoft YaHei UI", "Segoe UI", sans-serif;
+  --font-utility: "Segoe UI Variable Small", "Microsoft YaHei UI", "Segoe UI", sans-serif;
   --font-mono: "Cascadia Code", "Cascadia Mono", Consolas, monospace;
 
-  --sidebar-width: 264px;
-  --header-height: 58px;
-  --shadow-composer: 0 8px 26px rgb(28 36 51 / 8%);
-  --shadow-dialog: 0 24px 70px rgb(28 36 51 / 18%);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --sidebar-width: 272px;
+  --inspector-width: 350px;
+  --header-height: 64px;
+  --shadow-composer: 0 10px 30px rgb(24 32 43 / 10%);
+  --shadow-dialog: 0 28px 80px rgb(15 23 42 / 24%);
+  --shadow-panel: -18px 0 50px rgb(15 23 42 / 16%);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }

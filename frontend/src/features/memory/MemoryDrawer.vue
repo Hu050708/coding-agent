@@ -9,6 +9,7 @@ const memory = useMemoryStore()
 const panel = ref<HTMLElement | null>(null)
 const draft = ref('')
 const kind = ref<MemoryEntry['kind']>('note')
+let previousFocus: HTMLElement | null = null
 
 const kindLabels: Record<MemoryEntry['kind'], string> = {
   preference: '偏好',
@@ -33,13 +34,32 @@ async function clearAll(): Promise<void> {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') memory.close()
+  if (event.key === 'Escape') {
+    memory.close()
+    return
+  }
+  if (event.key !== 'Tab' || !panel.value) return
+  const controls = [...panel.value.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+  const first = controls[0]
+  const last = controls.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 watch(
   () => memory.open,
   async (isOpen) => {
-    if (!isOpen) return
+    if (!isOpen) {
+      previousFocus?.focus()
+      previousFocus = null
+      return
+    }
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     await nextTick()
     panel.value?.focus()
   },
@@ -50,11 +70,11 @@ watch(
   <Teleport to="body">
     <Transition name="drawer">
       <div v-if="memory.open" class="drawer-layer" @mousedown.self="memory.close">
-        <aside ref="panel" class="memory-drawer" aria-label="工作区记忆" tabindex="-1" @keydown="onKeydown">
+        <aside ref="panel" class="memory-drawer" role="dialog" aria-modal="true" aria-labelledby="memory-title" tabindex="-1" @keydown="onKeydown">
           <header>
             <div>
               <p class="eyebrow">Workspace memory</p>
-              <h2>工作区记忆</h2>
+              <h2 id="memory-title">工作区记忆</h2>
             </div>
             <button class="icon-button" type="button" aria-label="关闭工作区记忆" @click="memory.close">
               <AppIcon name="close" />
@@ -189,7 +209,7 @@ textarea {
 }
 
 select {
-  height: 32px;
+  height: 44px;
   padding: 0 28px 0 9px;
   font-size: 12px;
 }
@@ -203,7 +223,7 @@ textarea {
 }
 
 .compact {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 12px;
   font-size: 12px;
 }
@@ -239,7 +259,8 @@ textarea {
 
 .memory-actions button,
 .inline-error button {
-  padding: 0;
+  min-height: 44px;
+  padding: 0 4px;
   color: var(--accent);
   background: transparent;
   font-size: 11px;
@@ -259,6 +280,7 @@ textarea {
 
 .clear-memory {
   width: 100%;
+  min-height: 44px;
   margin-top: 12px;
   padding: 9px;
   border: 1px solid var(--danger-border);

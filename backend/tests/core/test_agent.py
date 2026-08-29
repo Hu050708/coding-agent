@@ -594,9 +594,12 @@ def test_tool_call_budget_rejects_an_oversized_batch_before_execution():
     assert [message["role"] for message in result.messages] == ["system", "user"]
 
 
-def test_token_budget_rejects_an_over_budget_response_before_history_commit():
+@pytest.mark.parametrize("observed_tokens", [10, 11])
+def test_token_budget_rejects_a_response_at_or_over_the_limit_before_history_commit(
+    observed_tokens,
+):
     result = make_agent(
-        FakeAdapter(final_completion(usage=11)),
+        FakeAdapter(final_completion(usage=observed_tokens)),
         config=AgentConfig(max_total_tokens=10),
     ).run("task")
 

@@ -17,9 +17,16 @@ const approval: ApprovalRequest = {
   expires_at: null,
 }
 
+function mountCard() {
+  return mount(ApprovalCard, {
+    props: { approval, busy: false },
+    global: { stubs: { teleport: true } },
+  })
+}
+
 describe('ApprovalCard', () => {
   it('shows escaped arguments without injecting a forged command line', () => {
-    const wrapper = mount(ApprovalCard, { props: { approval, busy: false } })
+    const wrapper = mountCard()
     const command = wrapper.get('pre').text()
     expect(command).toContain('"safe.py\\nforged command"')
     expect(command).toContain('"--label=a b"')
@@ -27,8 +34,14 @@ describe('ApprovalCard', () => {
   })
 
   it('emits an explicit one-time decision', async () => {
-    const wrapper = mount(ApprovalCard, { props: { approval, busy: false } })
-    await wrapper.get('button.primary-button').trigger('click')
+    const wrapper = mountCard()
+    await wrapper.get('button.approve').trigger('click')
     expect(wrapper.emitted('approve')).toHaveLength(1)
+  })
+
+  it('gives approve and reject actions equal decision styling', () => {
+    const wrapper = mountCard()
+    expect(wrapper.get('button.approve').classes()).toContain('approval-decision')
+    expect(wrapper.get('button.reject').classes()).toContain('approval-decision')
   })
 })

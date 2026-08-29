@@ -10,9 +10,9 @@ describe('PermissionPicker', () => {
       props: { modelValue: 'agent', disabled: false },
     })
 
-    expect(wrapper.text()).toContain('请求批准')
-    expect(wrapper.text()).toContain('帮我批准')
-    expect(wrapper.text()).toContain('工作区完全访问')
+    expect(wrapper.text()).toContain('严格确认')
+    expect(wrapper.text()).toContain('风险确认')
+    expect(wrapper.text()).toContain('工作区自动执行')
 
     await wrapper.get('button.workspace_full').trigger('click')
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual(['workspace_full'])

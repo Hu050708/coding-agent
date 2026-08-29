@@ -13,16 +13,17 @@ body,
 }
 
 html {
-  background: var(--surface);
+  background: var(--canvas);
+  scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--canvas);
   font-family: var(--font-body);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.55;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -37,10 +38,12 @@ select {
 
 button {
   border: 0;
+  touch-action: manipulation;
 }
 
 button:not(:disabled),
-select:not(:disabled) {
+select:not(:disabled),
+summary:not([aria-disabled="true"]) {
   cursor: pointer;
 }
 
@@ -59,11 +62,11 @@ pre,
 
 ::selection {
   color: var(--ink);
-  background: #d7e2fb;
+  background: #d8e4ff;
 }
 
 :focus-visible {
-  outline: 3px solid rgb(53 103 214 / 28%);
+  outline: 3px solid rgb(49 95 204 / 38%);
   outline-offset: 2px;
 }
 
@@ -81,11 +84,11 @@ pre,
 
 .icon-button {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   flex: none;
   place-items: center;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   color: var(--ink-soft);
   background: transparent;
 }
@@ -95,12 +98,13 @@ pre,
 }
 
 .primary-button,
-.secondary-button {
-  min-height: 34px;
-  padding: 0 13px;
-  border-radius: 7px;
-  font-size: 12px;
-  font-weight: 580;
+.secondary-button,
+.danger-button {
+  min-height: 44px;
+  padding: 0 18px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-weight: 650;
 }
 
 .primary-button {
@@ -121,9 +125,16 @@ pre,
   background: var(--surface-hover);
 }
 
+.danger-button {
+  border: 1px solid var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 .primary-button:disabled,
-.secondary-button:disabled {
-  opacity: 0.55;
+.secondary-button:disabled,
+.danger-button:disabled {
+  opacity: 0.52;
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -333,7 +333,7 @@ class Agent:
                     continue
                 completion = response
 
-            if usage.total_tokens > self.config.max_total_tokens:
+            if usage.total_tokens >= self.config.max_total_tokens:
                 return finish(
                     AgentStatus.BUDGET_EXHAUSTED,
                     TerminationReason.TOKEN_BUDGET_EXCEEDED,

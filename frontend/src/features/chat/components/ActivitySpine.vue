@@ -1,107 +1,101 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
-import type { ApprovalRequest, RunEventEnvelope, RunStatus } from '../../../shared/api/types'
+import type { RunEventEnvelope, RunStatus } from '../../../shared/api/types'
 import { presentRunEvent } from '../../runs/runPresentation'
-import ApprovalCard from './ApprovalCard.vue'
 
 const props = defineProps<{
   events: RunEventEnvelope[]
   status: RunStatus
-  approval: ApprovalRequest | null
-  actionBusy: boolean
 }>()
-
-defineEmits<{ approve: []; reject: [] }>()
 
 const expanded = ref(true)
 const items = computed(() => props.events.map(presentRunEvent))
 const active = computed(() =>
   ['starting', 'running', 'waiting_approval', 'cancelling'].includes(props.status),
 )
+const traceSummary = computed(() => {
+  const decisions = props.events.filter((item) => item.event === 'model.completed').length
+  const tools = props.events.filter((item) => item.event === 'tool.completed').length
+  return `${decisions} 次决策 · ${tools} 次反馈`
+})
 </script>
 
 <template>
-  <section class="activity-spine" aria-label="Agent 活动">
+  <section class="activity-spine" aria-labelledby="activity-title">
     <button class="spine-toggle" type="button" :aria-expanded="expanded" @click="expanded = !expanded">
-      <span class="pulse" :class="{ active }" />
-      <span>{{ active ? 'Agent 活动中' : 'Agent 活动' }}</span>
-      <span class="event-count">{{ items.length }} 项</span>
-      <span class="chevron" :class="{ expanded }">⌄</span>
+      <span>
+        <strong id="activity-title">执行轨迹</strong>
+        <small>{{ traceSummary }}</small>
+      </span>
+      <span class="chevron" :class="{ expanded }" aria-hidden="true">⌄</span>
     </button>
 
-    <div v-if="expanded" class="spine-items">
-      <div v-for="item in items" :key="item.seq" class="spine-item" :class="item.tone">
-        <span class="node" />
+    <div v-if="expanded" class="spine-items" aria-live="polite">
+      <div
+        v-for="(item, index) in items"
+        :key="item.seq"
+        class="spine-item"
+        :class="item.tone"
+        :aria-current="active && index === items.length - 1 ? 'step' : undefined"
+      >
+        <span class="node"><span /></span>
         <div class="event-copy">
           <div class="event-title-row">
-            <span>{{ item.title }}</span>
+            <span class="stage-chip" :class="item.stage">{{ item.stageLabel }}</span>
+            <span class="event-title">{{ item.title }}</span>
             <span v-if="item.meta" class="event-meta">{{ item.meta }}</span>
           </div>
           <p v-if="item.detail">{{ item.detail }}</p>
         </div>
       </div>
       <div v-if="items.length === 0" class="spine-item active">
-        <span class="node" />
-        <div class="event-copy"><span>正在等待第一个事件…</span></div>
+        <span class="node"><span /></span>
+        <div class="event-copy waiting-copy">正在等待第一个运行事件…</div>
       </div>
     </div>
-
-    <ApprovalCard
-      v-if="approval?.status === 'pending'"
-      :approval="approval"
-      :busy="actionBusy"
-      @approve="$emit('approve')"
-      @reject="$emit('reject')"
-    />
   </section>
 </template>
 
 <style scoped>
 .activity-spine {
-  margin: 2px 0 16px;
-  padding: 10px 12px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--surface-subtle);
+  padding: 0 18px 18px;
 }
 
 .spine-toggle {
   display: flex;
   width: 100%;
+  min-height: 52px;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   padding: 0;
+  color: var(--ink);
   background: transparent;
-  color: var(--ink-soft);
-  font-family: var(--font-utility);
-  font-size: 11px;
-  font-weight: 650;
   text-align: left;
 }
 
-.pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--ink-faint);
+.spine-toggle > span:first-child {
+  display: grid;
+  gap: 1px;
 }
 
-.pulse.active {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+.spine-toggle strong {
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.event-count {
-  margin-left: auto;
-  color: var(--ink-faint);
+.spine-toggle small {
+  color: var(--ink-muted);
+  font-family: var(--font-utility);
   font-size: 10px;
-  font-weight: 500;
 }
 
 .chevron {
+  color: var(--ink-faint);
+  font-size: 15px;
   transform: rotate(-90deg);
-  transition: transform 140ms var(--ease-out);
+  transition: transform 180ms var(--ease-out);
 }
 
 .chevron.expanded {
@@ -110,15 +104,12 @@ const active = computed(() =>
 
 .spine-items {
   position: relative;
-  margin: 10px 0 0 3px;
-  padding-left: 17px;
+  padding: 2px 0 2px 24px;
 }
 
 .spine-items::before {
   position: absolute;
-  top: 8px;
-  bottom: 8px;
-  left: 3px;
+  inset: 9px auto 10px 7px;
   width: 1px;
   background: var(--activity-line);
   content: '';
@@ -126,67 +117,117 @@ const active = computed(() =>
 
 .spine-item {
   position: relative;
-  display: flex;
-  min-height: 29px;
-  align-items: flex-start;
-  padding: 4px 0 6px;
+  min-height: 50px;
+  padding: 5px 0 11px;
   color: var(--ink-soft);
-  font-size: 11.5px;
 }
 
 .node {
   position: absolute;
   top: 9px;
-  left: -17px;
-  width: 7px;
-  height: 7px;
+  left: -24px;
+  display: grid;
+  width: 15px;
+  height: 15px;
+  place-items: center;
   border: 2px solid var(--surface-subtle);
   border-radius: 50%;
-  background: var(--ink-faint);
-  box-sizing: content-box;
+  background: var(--line-strong);
 }
 
-.spine-item.active .node {
+.node span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.spine-item.active .node span {
   background: var(--accent);
 }
 
-.spine-item.success .node {
+.spine-item.active[aria-current="step"] .node {
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.spine-item.success .node span {
   background: var(--success);
 }
 
-.spine-item.warning .node {
+.spine-item.warning .node span {
   background: var(--warning);
 }
 
-.spine-item.danger .node {
+.spine-item.danger .node span {
   background: var(--danger);
 }
 
 .event-copy {
   min-width: 0;
-  flex: 1;
 }
 
 .event-title-row {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
+  align-items: baseline;
+  gap: 7px;
 }
 
-.event-copy p {
-  margin: 2px 0 0;
-  overflow: hidden;
+.stage-chip {
+  min-width: 31px;
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 4px;
   color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 10px;
+  background: var(--surface-hover);
+  font-family: var(--font-utility);
+  font-size: 8px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.stage-chip.decision {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.stage-chip.execution,
+.stage-chip.approval {
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.stage-chip.feedback {
+  color: var(--success);
+  background: var(--success-soft);
+}
+
+.event-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.event-copy p {
+  margin: 4px 0 0;
+  color: var(--ink-muted);
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
 .event-meta {
   flex: none;
+  margin-left: auto;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 8px;
+}
+
+.waiting-copy {
+  padding-top: 3px;
+  color: var(--ink-muted);
+  font-size: 11px;
 }
 </style>

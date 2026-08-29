@@ -215,6 +215,10 @@ def test_health_workspace_conversation_run_messages_and_sse(tmp_path):
 
         assert terminal["final_content"] == "done"
         assert terminal["permission_mode"] == "ask"
+        assert terminal["model_calls"] == 1
+        assert terminal["tool_calls"] == 1
+        assert terminal["duration_ms"] == 10
+        assert terminal["usage"]["total_tokens"] == 10
         messages = client.get(
             f"/api/v1/conversations/{conversation['id']}/messages"
         ).json()["items"]

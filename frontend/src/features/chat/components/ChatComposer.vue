@@ -28,7 +28,7 @@ function resize(): void {
   const element = textarea.value
   if (!element) return
   element.style.height = '0px'
-  element.style.height = `${Math.min(180, Math.max(48, element.scrollHeight))}px`
+  element.style.height = `${Math.min(210, Math.max(56, element.scrollHeight))}px`
 }
 
 function submit(): void {
@@ -59,8 +59,8 @@ watch(
 
 <template>
   <div class="composer-zone">
-    <div class="composer" :class="{ disabled }">
-      <label class="sr-only" for="task-input">输入任务</label>
+    <div class="composer" :class="{ disabled, active }">
+      <label class="sr-only" for="task-input">输入编码任务</label>
       <textarea
         id="task-input"
         ref="textarea"
@@ -68,7 +68,7 @@ watch(
         rows="1"
         maxlength="12000"
         :disabled="disabled"
-        :placeholder="disabled ? '先选择工作区并创建会话' : '描述要完成的编码任务…'"
+        :placeholder="disabled ? '先选择工作区并创建会话' : active ? 'Agent 正在处理当前任务，你仍可以准备下一条消息…' : '描述问题、期望结果和不能触碰的范围…'"
         @keydown="onKeydown"
       />
       <div class="composer-toolbar">
@@ -85,19 +85,24 @@ watch(
               :disabled="active || disabled"
               @change="emit('update:useMemory', ($event.target as HTMLInputElement).checked)"
             >
+            <span class="toggle-track" aria-hidden="true"><span /></span>
             <span>使用记忆</span>
           </label>
         </div>
-        <button v-if="active" class="send-button stop-button" type="button" aria-label="停止任务" :disabled="busy" @click="emit('stop')">
+        <span v-if="!active" class="shortcut-hint">Enter 发送 · Shift Enter 换行</span>
+        <button v-if="active" class="composer-action stop-button" type="button" aria-label="停止任务" :disabled="busy" @click="emit('stop')">
           <AppIcon name="stop" />
+          <span>{{ busy ? '停止中' : '停止' }}</span>
         </button>
-        <button v-else class="send-button" type="button" aria-label="发送任务" :disabled="disabled || busy || !content.trim()" @click="submit">
+        <button v-else class="composer-action send-button" type="button" aria-label="发送任务" :disabled="disabled || busy || !content.trim()" @click="submit">
+          <span>发送</span>
           <AppIcon name="arrow-up" />
         </button>
       </div>
     </div>
     <p id="permission-boundary" class="boundary-copy">
-      权限限制在当前工作区；危险与提权操作始终禁止。代码和测试仍以当前 Windows 用户身份运行，并非系统沙箱。
+      <AppIcon name="shield" />
+      权限限定在当前工作区；危险、提权和工作区外操作始终禁止。运行使用当前 Windows 用户权限，并非系统沙箱。
     </p>
   </div>
 </template>
@@ -105,21 +110,21 @@ watch(
 <style scoped>
 .composer-zone {
   position: relative;
-  z-index: 2;
+  z-index: 4;
   flex: none;
-  padding: 10px 24px 16px;
-  background: var(--surface);
+  padding: 12px 24px 18px;
+  background: linear-gradient(to bottom, rgb(245 247 250 / 20%), var(--canvas) 25%);
 }
 
 .composer {
-  width: min(780px, 100%);
+  width: min(840px, 100%);
   margin: 0 auto;
   overflow: visible;
   border: 1px solid var(--line-strong);
-  border-radius: 13px;
+  border-radius: 15px;
   background: var(--surface);
   box-shadow: var(--shadow-composer);
-  transition: border-color 140ms ease, box-shadow 140ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .composer:focus-within {
@@ -134,16 +139,17 @@ watch(
 textarea {
   display: block;
   width: 100%;
-  min-height: 54px;
-  max-height: 180px;
-  padding: 13px 14px 7px;
+  min-height: 64px;
+  max-height: 210px;
+  padding: 16px 16px 8px;
   overflow-y: auto;
   resize: none;
   border: 0;
   outline: 0;
+  color: var(--ink);
   background: transparent;
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
 textarea::placeholder {
@@ -152,67 +158,130 @@ textarea::placeholder {
 
 .composer-toolbar {
   display: flex;
+  min-height: 56px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 7px 8px 8px;
+  gap: 10px;
+  padding: 8px 9px 9px;
 }
 
 .composer-options {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .memory-toggle {
   display: inline-flex;
-  height: 31px;
+  min-height: 40px;
   align-items: center;
-  gap: 6px;
-  padding: 0 8px;
+  gap: 7px;
+  padding: 0 10px;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   color: var(--ink-soft);
   background: var(--surface-subtle);
   font-size: 11px;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .memory-toggle input {
-  width: 12px;
-  height: 12px;
-  margin: 0;
-  accent-color: var(--accent);
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
 }
 
-.send-button {
-  display: grid;
-  width: 32px;
-  height: 32px;
+.toggle-track {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  transition: background 160ms ease;
+}
+
+.toggle-track span {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 2px rgb(24 32 43 / 20%);
+  transition: transform 160ms ease;
+}
+
+.memory-toggle input:checked + .toggle-track {
+  background: var(--accent);
+}
+
+.memory-toggle input:checked + .toggle-track span {
+  transform: translateX(10px);
+}
+
+.memory-toggle input:focus-visible + .toggle-track {
+  outline: 3px solid rgb(49 95 204 / 38%);
+  outline-offset: 2px;
+}
+
+.shortcut-hint {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-family: var(--font-utility);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.composer-action {
+  display: inline-flex;
+  min-width: 76px;
+  min-height: 44px;
   flex: none;
-  place-items: center;
-  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border-radius: 9px;
   color: white;
   background: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.composer-action :deep(svg) {
+  width: 15px;
+  height: 15px;
 }
 
 .send-button:hover:not(:disabled) {
   background: var(--accent-strong);
 }
 
-.send-button:disabled {
+.composer-action:disabled {
   color: var(--ink-faint);
   background: var(--surface-hover);
 }
 
 .stop-button {
+  border: 1px solid var(--danger-border);
   color: var(--danger);
   background: var(--danger-soft);
 }
 
+.stop-button:hover:not(:disabled) {
+  background: #f8dfe4;
+}
+
 .boundary-copy {
-  width: min(780px, 100%);
-  margin: 6px auto 0;
+  display: flex;
+  width: min(840px, 100%);
+  align-items: flex-start;
+  justify-content: center;
+  gap: 5px;
+  margin: 7px auto 0;
   color: var(--ink-faint);
   font-family: var(--font-utility);
   font-size: 9.5px;
@@ -220,16 +289,56 @@ textarea::placeholder {
   text-align: center;
 }
 
-@media (max-width: 640px) {
+.boundary-copy :deep(svg) {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-top: 1px;
+}
+
+@media (max-width: 760px) {
   .composer-zone {
-    padding: 8px 10px 10px;
+    padding: 8px 10px calc(10px + env(safe-area-inset-bottom));
   }
 
+  textarea {
+    min-height: 60px;
+    padding: 14px 14px 7px;
+    font-size: 16px;
+  }
+
+  .composer-toolbar {
+    align-items: flex-end;
+    padding: 7px;
+  }
+
+  .shortcut-hint,
   .boundary-copy {
     display: none;
   }
 
-  .memory-toggle span {
+  .composer-options {
+    gap: 6px;
+  }
+
+  .memory-toggle {
+    min-width: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0 9px;
+  }
+
+  .memory-toggle > span:last-child {
+    display: none;
+  }
+
+  .composer-action {
+    min-width: 44px;
+    width: 44px;
+    padding: 0;
+  }
+
+  .composer-action span {
     display: none;
   }
 }

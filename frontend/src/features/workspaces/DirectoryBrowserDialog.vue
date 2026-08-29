@@ -17,6 +17,7 @@ const listing = ref<DirectoryListing | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 let generation = 0
+let previousFocus: HTMLElement | null = null
 
 async function browse(path?: string): Promise<void> {
   const current = ++generation
@@ -34,13 +35,33 @@ async function browse(path?: string): Promise<void> {
 
 function onKeydown(event: KeyboardEvent): void {
   if (!props.open) return
-  if (event.key === 'Escape') emit('close')
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    emit('close')
+    return
+  }
+  if (event.key !== 'Tab' || !dialog.value) return
+  const controls = [...dialog.value.querySelectorAll<HTMLElement>('button:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')]
+  const first = controls[0]
+  const last = controls.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last?.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first?.focus()
+  }
 }
 
 watch(
   () => props.open,
   async (isOpen) => {
-    if (!isOpen) return
+    if (!isOpen) {
+      previousFocus?.focus()
+      previousFocus = null
+      return
+    }
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
     await browse()
     await nextTick()
     dialog.value?.focus()
@@ -199,6 +220,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 .directory-row {
   display: flex;
   width: 100%;
+  min-height: 44px;
   align-items: center;
   gap: 10px;
   padding: 10px 9px;

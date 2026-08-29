@@ -75,8 +75,14 @@ class RunResponse(ApiModel):
     reason: str | None = None
     # 失败时经过清洗的错误码和说明。
     error: dict[str, str] | None = None
-    # token、模型调用和工具调用计数。
+    # token 用量计数。
     usage: dict[str, int] = Field(default_factory=dict)
+    # 已完成的模型调用次数。
+    model_calls: int = Field(default=0, ge=0)
+    # 已尝试的工具调用次数。
+    tool_calls: int = Field(default=0, ge=0)
+    # 进入终态后的总运行耗时（毫秒）。
+    duration_ms: int | None = Field(default=None, ge=0)
     # 当前待处理审批的安全展示数据。
     pending_approval: dict[str, Any] | None = None
     # 运行记录创建时间。

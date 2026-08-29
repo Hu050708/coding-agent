@@ -102,6 +102,9 @@ export interface RunSummary {
   error: ApiFailure | null
   pending_approval: ApprovalRequest | null
   usage: UsageSummary
+  model_calls?: number
+  tool_calls?: number
+  duration_ms?: number | null
   created_at: string
   started_at: string | null
   finished_at: string | null

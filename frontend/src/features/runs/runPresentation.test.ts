@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { presentRunEvent } from './runPresentation'
+import { presentRunEvent, presentRunOutcome } from './runPresentation'
 
 describe('run event presentation', () => {
   it('only renders bounded safe summaries', () => {
@@ -46,8 +46,34 @@ describe('run event presentation', () => {
         },
       }),
     ).toMatchObject({
-      title: 'read_file完成',
+      title: '读取文件 · read_file已返回',
       detail: '检测到完全重复的工具结果，已提示模型调整策略',
+      tone: 'warning',
+      stage: 'feedback',
+    })
+  })
+
+  it('labels a model final as awaiting independent verification', () => {
+    expect(
+      presentRunOutcome({ status: 'completed', reason: 'model_final', error: null }),
+    ).toMatchObject({
+      title: '模型已结束本次运行',
+      statusLabel: '待外部验证',
+      reasonLabel: '模型返回最终回答',
+      tone: 'neutral',
+    })
+  })
+
+  it('keeps budget exhaustion separate from successful completion', () => {
+    expect(
+      presentRunOutcome({
+        status: 'budget_exhausted',
+        reason: 'token_budget_exceeded',
+        error: null,
+      }),
+    ).toMatchObject({
+      statusLabel: '未验证',
+      reasonLabel: '达到 Token 上限',
       tone: 'warning',
     })
   })

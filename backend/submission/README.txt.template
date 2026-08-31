@@ -1,10 +1,10 @@
 项目：Coding Agent 编程智能体
-仓库地址：<项目完成并公开后填写 GitHub URL>
+仓库地址：<公开 GitHub URL>
 
-环境：Python 3.11、Conda、Docker Desktop、Node.js 22。仓库根目录名为 coding-agent。进入 backend，执行“conda env create -f environment.yml”和“conda activate coding-agent”，按 .env.example 在未入库的 .env 中配置 DEEPSEEK_API_KEY、允许根目录和 PostgreSQL 密码/URL。
+运行：安装 Docker Desktop，在仓库根目录将 .env.docker.example 复制为 .env，填写 DEEPSEEK_API_KEY、数据库密码和宿主机工作区路径，执行 docker compose up -d --build。浏览器访问 http://127.0.0.1:8080。API 文档位于 http://127.0.0.1:8080/api/docs。
 
-Web 运行：在仓库根目录将 .env.docker.example 复制为未入库的 .env，填写 DeepSeek 密钥、URL 安全数据库密码和宿主机工作区路径，然后执行“docker compose up -d --build”。该命令启动 frontend、backend、postgres 三个容器，仅将 http://127.0.0.1:8080 暴露给本机浏览器；Alembic 在后端启动时自动迁移数据库。CLI 仍可脱离 Docker、数据库和 Web 运行：coding-agent --workspace <项目目录> "修复问题、补测试并验证"。
+CLI：进入 backend，按 environment.yml 创建并激活 coding-agent 环境，在当前终端设置 DEEPSEEK_API_KEY，然后执行 coding-agent --workspace <项目目录> "修复问题、补测试并验证"。CLI 不依赖 Web 和 PostgreSQL。
 
-特色：不使用 Agent 框架或 Agent SDK，自行实现 DeepSeek tool calling 的历史、解析、本地工具、循环终止、重试和预算。Web 支持受限工作区、持久会话、SSE 断线重放、审批、手动确认的长期记忆，以及 review/workspace/auto 三档后端权限；DENY 始终不能绕过。PostgreSQL 只保存可见消息和安全事件，不保存隐藏推理或完整工具输出。
+特色：项目自行实现对话历史、模型输出解析、Agent 循环、预算、重试、终止和八个本地工具，不使用 Agent 框架或服务端文件工具。文件操作受工作区限制，修改和删除使用 SHA-256 防止覆盖并发变化。Web 支持持久会话、SSE 断线重放、审批、取消、三档权限和用户确认的工作区记忆。正式评测从全新任务副本开始，并由 Agent 工作区外的 verifier 验收。
 
-边界：工作区和命令策略不是 OS 沙箱；获准程序仍有当前用户权限。开发中使用 Codex/ChatGPT 辅助分析、实现与审查，作者理解并验证全部设计，对项目负责。
+边界：命令策略不是操作系统沙箱；获准程序仍有当前运行账户权限。开发过程中使用 Codex/ChatGPT 辅助分析、实现和审查，作者负责设计与验证。

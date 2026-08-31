@@ -26,7 +26,7 @@ from .base import (
     utc_now,
 )
 class MemoryRepository:
-    """管理工作区记忆以及绑定到运行的不可变快照。"""
+    """通过 SQLAlchemy 会话管理 PostgreSQL 工作区记忆及运行快照。"""
 
     def __init__(self, session: Session) -> None:
         """绑定当前事务使用的 ORM 会话。

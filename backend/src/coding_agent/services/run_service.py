@@ -460,9 +460,9 @@ class ConversationRunService(RunEvents):
                 VisibleMessage(role=item.role, content=item.content)
                 for item in history_records
             )
-            snapshots = getattr(creation, "memory_snapshot", None)
-            if snapshots is None:
-                snapshots = self.persistence.list_run_memories(run.id)
+            # 运行创建事务已将 PostgreSQL 中选中的记忆冻结到本次运行记录中；
+            # 这里直接使用该快照，避免启动线程前再次查询而读到不同的数据。
+            snapshots = creation.memory_snapshot
             memory = tuple(
                 MemoryReference(
                     id=(

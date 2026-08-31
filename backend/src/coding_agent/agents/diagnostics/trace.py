@@ -1,8 +1,8 @@
 """仅写入白名单字段的轻量诊断事件记录器。
 
-这是调试跟踪而非审计日志，绝不记录提示词、模型推理、文件内容、命令输出或
-API 凭据。调用方必须在发送前把模型选择的工具名等不可信标识映射为已知安全
-标签；本记录器刻意不了解工具模型。
+该文件是一个带严格白名单和脱敏规则的 JSONL 运行记录器，
+让开发者知道 Agent 做到了哪一步、用了多少资源、工具是否成功，
+同时尽量避免把用户内容和敏感信息写进日志。
 """
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def utc_timestamp() -> str:
 
 
 def summarize_argv(argv: list[str] | tuple[str, ...], *, max_chars: int = 160) -> str:
-    """为诊断事件生成刻意有损的命令摘要。
+    """能够判断运行了什么类型的命令和避免泄露命令中的敏感内容。
 
     :param argv: 已拆分的命令参数序列。
     :param max_chars: 最终摘要允许包含的最大字符数。
@@ -94,25 +94,32 @@ def summarize_argv(argv: list[str] | tuple[str, ...], *, max_chars: int = 160) -
     previous = ""
     for index, raw in enumerate(argv[:12]):
         value = str(raw)
+        # 第一个参数只保留程序名称
         if index == 0:
             piece = Path(value).name or "<executable>"
+        # 保留命令选项名称
         elif value.startswith("-"):
             piece = value.split("=", 1)[0]
+        # 特殊保留 Python 模块名称
         elif previous == "-m" and re.fullmatch(r"[A-Za-z0-9_.-]+", value):
             piece = value
+        # 路径只保留文件名
         elif Path(value).suffix and re.fullmatch(r"[A-Za-z0-9_.\\/ -]+", value):
             piece = Path(value).name
+        # 其他普通参数进行隐藏
         else:
             piece = Path(value).name if ("/" in value or "\\" in value) else "<arg>"
+        # 单个参数最多保留 48 个字符
         pieces.append(piece[:48])
         previous = value
     if len(argv) > 12:
         pieces.append("…")
+    # 整个摘要受 max_chars 限制
     return " ".join(pieces)[:max_chars]
 
 
 def summarize_target(value: Any, *, max_chars: int = 200) -> str | None:
-    """返回可持久化的工作区相对目标标签。
+    """把一个可能表示文件或目录路径的值，转换成可以安全写入诊断日志的“工作区相对路径标签”
 
     :param value: 工具参数或工具结果中的候选路径。
     :param max_chars: 标签允许包含的最大字符数。

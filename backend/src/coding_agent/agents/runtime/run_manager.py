@@ -510,7 +510,7 @@ class RunManager:
         use_memory: bool = True,
         permission_mode: PermissionMode | str = PermissionMode.AGENT,
         prior_messages: tuple[VisibleMessage, ...] = (),
-        memory_snapshot: tuple[MemoryReference, ...] | None = None,
+        memory_snapshot: tuple[MemoryReference, ...] = (),
         run_id: str | None = None,
         on_event: Callable[[RunEvent], None] | None = None,
         on_finished: Callable[[dict[str, Any]], bool | None] | None = None,
@@ -522,7 +522,7 @@ class RunManager:
         :param use_memory: 是否允许本次运行使用工作区记忆。
         :param permission_mode: 本次运行冻结的权限模式。
         :param prior_messages: 创建事务中冻结的可见会话历史。
-        :param memory_snapshot: 创建事务中冻结的记忆；``None`` 表示旧调用方未预加载。
+        :param memory_snapshot: PostgreSQL 创建事务中冻结的记忆；空元组表示没有可用记忆。
         :param run_id: 可选外部运行标识；省略时由管理器生成。
         :param on_event: 每次发布安全事件时调用的可选持久化回调。
         :param on_finished: 运行终止后执行持久化对账的可选回调。
@@ -551,9 +551,8 @@ class RunManager:
                 "Conversation history is malformed.",
                 status_code=422,
             )
-        if memory_snapshot is not None and (
-            not isinstance(memory_snapshot, tuple)
-            or not all(isinstance(item, MemoryReference) for item in memory_snapshot)
+        if not isinstance(memory_snapshot, tuple) or not all(
+            isinstance(item, MemoryReference) for item in memory_snapshot
         ):
             raise RunManagerError(
                 "memory_snapshot_invalid",
@@ -838,7 +837,7 @@ class RunManager:
         use_memory: bool,
         workspace_key: str,
         prior_messages: tuple[VisibleMessage, ...],
-        memory_snapshot: tuple[MemoryReference, ...] | None,
+        memory_snapshot: tuple[MemoryReference, ...],
     ) -> None:
         """在线程池中执行一个会话，并保证任何退出路径都完成资源收尾。
 
@@ -847,7 +846,7 @@ class RunManager:
         :param use_memory: 是否启用工作区记忆。
         :param workspace_key: 用于释放活动工作区占位的规范路径键。
         :param prior_messages: 创建事务冻结的可见历史消息。
-        :param memory_snapshot: 创建事务冻结的可选记忆快照。
+        :param memory_snapshot: PostgreSQL 创建事务冻结的记忆快照。
         """
 
         # 第一步：把会话切换为运行态，并发布可供持久化层投影的启动事件。

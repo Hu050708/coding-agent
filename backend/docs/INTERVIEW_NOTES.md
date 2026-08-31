@@ -57,7 +57,7 @@
 
 ## 为什么选择 PostgreSQL 和数据库重放 SSE
 
-- WebUI 需要长期保存工作区、会话、消息、审批和记忆；相比继续扩展旧的 SQLite 单文件实现，
+- WebUI 需要长期保存工作区、会话、消息、审批和记忆；项目已移除早期的 SQLite 单文件记忆实现，
   PostgreSQL 能更直接地承载部分唯一索引、行锁和多工作区并发语义，因此由 SQLAlchemy 2、
   psycopg 3 与 Alembic 管理独立数据库。这是工程取舍，不是宣称 SQLite 无法保存这些实体。
 - 同一 workspace 最多一个活动 run 既有应用层友好检查，也有 PostgreSQL 部分唯一索引兜底；

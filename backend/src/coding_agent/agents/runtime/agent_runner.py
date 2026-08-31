@@ -24,7 +24,7 @@ from coding_agent.agents.diagnostics.trace import TraceWriter
 from coding_agent.agents.providers.deepseek import DeepSeekAdapter
 from coding_agent.agents.security import PermissionMode, ToolApprovalRequest, Workspace
 from coding_agent.agents.tools import ToolRegistry
-from coding_agent.agents.memory import MemoryService, MemorySummary
+from coding_agent.agents.memory import MemorySummary
 
 from coding_agent.settings import AppSettings
 
@@ -53,9 +53,8 @@ class RunSpec:
     permission_mode: PermissionMode = PermissionMode.AGENT
     # 创建运行事务中冻结的用户可见会话历史。
     prior_messages: tuple[VisibleMessage, ...] = ()
-    # None 是兼容旧调用方的“未预加载”信号；空元组则表示数据库已冻结空快照，
-    # 后者不能触发再次读取。
-    memory_snapshot: tuple[MemoryReference, ...] | None = None
+    # 创建运行时由 PostgreSQL 事务冻结的记忆快照；空元组表示没有可用记忆。
+    memory_snapshot: tuple[MemoryReference, ...] = ()
 
     def __post_init__(self) -> None:
         """规范权限枚举并校验历史、记忆快照均为不可变类型。"""
@@ -65,12 +64,11 @@ class RunSpec:
             isinstance(message, VisibleMessage) for message in self.prior_messages
         ):
             raise TypeError("prior_messages must be an immutable tuple of VisibleMessage values")
-        if self.memory_snapshot is not None and (
-            not isinstance(self.memory_snapshot, tuple)
-            or not all(isinstance(entry, MemoryReference) for entry in self.memory_snapshot)
+        if not isinstance(self.memory_snapshot, tuple) or not all(
+            isinstance(entry, MemoryReference) for entry in self.memory_snapshot
         ):
             raise TypeError(
-                "memory_snapshot must be None or an immutable tuple of MemoryReference values"
+                "memory_snapshot must be an immutable tuple of MemoryReference values"
             )
 
 
@@ -179,18 +177,15 @@ class AgentRunner:
         self,
         settings: AppSettings,
         *,
-        memory_service: MemoryService | None = None,
         context_builder: AgentContextBuilder | None = None,
     ) -> None:
-        """保存 Web 配置及可选记忆、上下文服务。
+        """保存 Web 配置及可选的上下文构建器。
 
         :param settings: 模型、预算、跟踪目录等后端应用配置。
-        :param memory_service: 兼容旧调用路径的可选记忆查询服务。
         :param context_builder: 可注入的上下文校验与裁剪器。
         """
 
         self.settings = settings
-        self.memory_service = memory_service
         self.context_builder = context_builder or AgentContextBuilder()
 
     @property
@@ -247,33 +242,17 @@ class AgentRunner:
             sinks.insert(0, TraceWriter(trace_path))
         combined_trace = CompositeTrace(*sinks)
 
-        # 第二步：优先使用创建事务冻结的记忆快照；仅兼容旧调用时才回查记忆服务。
-        memory = MemorySummary(status="disabled" if not spec.use_memory else "unavailable")
-        memory_references: tuple[MemoryReference, ...] = ()
-        if spec.use_memory and spec.memory_snapshot is not None:
-            # 应用层已在创建运行的事务中冻结该快照，此处不得按工作区重新查询。
-            memory_references = spec.memory_snapshot
+        # 第二步：直接使用创建运行时由 PostgreSQL 事务冻结的记忆快照。
+        # 禁用记忆时即使快照非空也不注入上下文，避免违背本次运行的用户选择。
+        memory_references = spec.memory_snapshot if spec.use_memory else ()
+        if spec.use_memory:
             memory = MemorySummary(
                 status="loaded" if memory_references else "empty",
                 loaded_count=len(memory_references),
                 loaded_ids=tuple(entry.id for entry in memory_references),
             )
-        elif spec.use_memory and self.memory_service is not None:
-            try:
-                snapshot = self.memory_service.snapshot(workspace=spec.workspace, task=spec.task)
-                memory = snapshot.summary
-                memory_references = tuple(
-                    MemoryReference(
-                        id=entry.id,
-                        kind=entry.kind.value,
-                        content=entry.content,
-                    )
-                    for entry in snapshot.entries
-                )
-            except Exception:
-                # 运行时记忆是可选能力；记忆存储故障不能阻止当前有界任务执行。
-                memory = MemorySummary(status="unavailable")
-                memory_references = ()
+        else:
+            memory = MemorySummary(status="disabled")
         combined_trace.emit(
             "memory_loaded",
             run_id=spec.run_id,

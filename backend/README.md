@@ -43,8 +43,10 @@ CLI / Web 请求
 6. **理解安全边界**：依次阅读 `agents/security/workspace.py`、
    `workspace_policy.py`、`permission_policy.py` 和 `command_policy.py`，了解路径为何不能
    越出工作区、不同权限模式如何决策，以及哪些命令始终禁止执行。
-7. **理解上下文和记忆**：阅读 `agents/context.py` 与 `agents/memory/`。这里负责把会话历史、
-   当前任务和经用户确认的记忆整理成提供给模型的上下文。
+7. **理解上下文和记忆**：先读 `agents/context.py`，再沿
+   `services/memory_service.py` → `repository/memory_repo.py` → `models/memory.py` 阅读。
+   PostgreSQL 负责保存和冻结记忆，`agents/runtime/agent_runner.py` 只把冻结快照注入模型上下文；
+   `agents/memory/` 目前只保存运行时使用的加载状态摘要。
 8. **最后看两个入口**：CLI 路线从 `cli.py` 的 `run_cli()` 开始；Web 路线从 `main.py` 的
    `create_app()` 开始，再沿 `router/` → `services/` → `repository/` 阅读。接口数据格式在
    `schemas/`，数据库表在 `models/`，连接和迁移在 `database/`。

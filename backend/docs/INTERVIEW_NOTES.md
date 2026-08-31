@@ -1,82 +1,146 @@
 # 面试答辩要点
 
-## 为什么这样分层
+## 30 秒介绍
 
-- `core` 依赖 `CompletionAdapter`、`ToolExecutor`、`TraceEmitter` 三个端口，因此假模型可覆盖整个循环，OpenAI SDK 不能渗入状态机。
-- `deepseek.py` 只整理 Chat Completions 返回值，不能执行工具或决定重试循环。
-- `tools` 负责合同、schema、分发和实现；`security` 负责路径、原子 IO 与命令策略；CLI 只是组合根。
+Coding Agent 是一个本地编程智能体。每轮把任务、运行历史和八个工具的 schema 发送给 DeepSeek。模型返回最终文本时结束；返回工具调用时，项目在本地校验参数、工作区和权限，执行后把结构化结果写回历史，再进入下一轮。循环受模型次数、工具次数、Token、时间和取消信号约束。
 
-## 为什么不用 streaming / strict / 模型摘要
+## 核心调用链
 
-- 非流式响应避免 reasoning 与 tool-call 增量拼装，使首版协议面可穷举测试。
-- DeepSeek `/beta` strict 不是安全边界，普通模式仍必须本地验证 JSON、类型、未知字段和路径。
-- thinking + tools 要完整回传本次运行中每个 assistant tool turn 的原始 `reasoning_content`。首版通过有限轮次、token 预算和工具输出限长控制上下文，不做模型摘要。
+```text
+CLI / Web
+  -> AgentContext
+  -> Agent.run
+  -> DeepSeekAdapter
+  -> ToolRegistry
+  -> Workspace / PermissionPolicy / CommandPolicy
+  -> 本地文件或命令
+  -> tool result
+  -> 下一轮模型请求
+```
 
-## 为什么文件生命周期拆成四个工具
+Web 在外层增加 RunManager、PostgreSQL 和 SSE，不改变 Agent 协议。
 
-- `make_directory` 幂等创建目录，可创建缺失父目录，但拒绝受保护路径和任一路径链接。
-- `write_file` 只创建，通过同卷临时文件与 fail-if-exists 原子发布避免竞态覆盖。
-- `replace_text` 必须携带最近读取的 SHA-256，且字面文本恰好匹配一次；状态改变就要求重读。Windows 不提供通用文件 CAS，最终替换前仍有极短 TOCTOU 窗口，不能夸大为绝对安全。
-- `delete_file` 只删除普通文件，要求最近读取哈希并在删除前复核；`ask` 和 `agent` 都需审批，不开放递归目录删除。
+## 题目要求对应
 
-## 为什么增加原生 search_text
+| 要求 | 实现 |
+|---|---|
+| 对话历史与上下文 | `agents/context.py`、`Agent.run()` 的完整运行历史 |
+| 工具定义与执行 | `agents/tools/schemas.py`、`registry.py` 和具体工具 |
+| 模型输出解析 | `agents/providers/deepseek.py`、`tool_protocol.py` |
+| 循环终止 | `Agent.run()` 的完成原因、预算、取消和终态 |
+| 错误处理 | API 重试、协议错误、结构化工具错误和审批结果 |
 
-- `list_files` 加分段 `read_file` 能完成搜索，但会产生更多模型轮次和无关上下文；让模型运行 `rg` 又把普通代码定位变成了命令策略问题。
-- `search_text` 由项目在工作区内执行有界字面搜索，不依赖 shell；文件数、总字节、单文件、结果和输出均有限制，并复用现有链接与受保护路径规则。
-- 首版没有加入正则表达式，因为符号定位的主要需求可由字面搜索覆盖，而正则会增加生成、转义和性能失败面。
+## 常见问题
 
-## 为什么重复检测只提示、不终止
+### 为什么它是 Agent，而不是普通问答？
 
-- 当前能可靠证明的是工具名、规范化参数和去除耗时字段后的结果完全相同，不能据此证明整个任务在语义上没有进展。
-- 从第三次相同交换起向模型结果附加恢复提示，但不改变原始 `ok` 或错误码，不抑制工具，也不增加终止原因；硬调用次数、token 和墙钟预算仍保证最终停止。
-- 检测器只保存有界 SHA-256 指纹，不保存参数、文件内容或命令输出。是否升级为自动终止要等批量真实任务数据，而不是凭直觉决定。
+模型可以根据工具结果继续决策。搜索、读取、修改、测试和修正由多个模型回合组成，程序负责执行和反馈。
 
-## 为什么命令不等于沙箱
+### 谁控制运行？
 
-- argv + `shell=False` 去掉管道、重定向和 shell 展开；策略再区分 ALLOW、CONFIRM、DENY，并剥离 API key 等环境变量。
-- 但获准的 Python/可执行程序仍有当前用户权限，可能访问工作区外资源。真正强隔离需要容器、VM 或受限 OS 账户，不在首版范围。
+模型决定下一步意图；程序决定参数是否有效、操作是否允许、工具如何执行以及何时终止。执行权和终止权在本地程序。
 
-## DeepSeek 协议关键点
+### 为什么使用 `openai` 包不等于使用 Agent SDK？
 
-- 默认 `deepseek-v4-flash`、thinking high、非流式 Chat Completions。
-- V4 thinking + tools 不发送 `tool_choice`。tool turn 的 assistant 消息完整保留 `reasoning_content` 和全部 tool calls，`content=null` 回放为 `""`；reasoning 不显示、不写日志。
-- `length/content_filter/协议冲突` 的部分消息不能入历史或执行；`insufficient_system_resource` 丢弃并在预算内原请求重试。
-- `MODEL_FINISHED` 只表示模型停止调用工具，任务是否成功由独立 verifier 判断，`verified` 默认是 unknown。
+该包只发送 HTTP 请求并提供响应对象。历史、工具 schema、本地执行、循环、预算、重试和终止都在项目源码中。假模型可以替换 DeepSeek 并运行完整离线测试。
 
-## 为什么 Web 和记忆不进入 Agent core
+### 上下文如何管理？
 
-- FastAPI、应用服务、PostgreSQL 和 RunManager 是本机 loopback 的传输、目录与编排层；CLI 和 Web
-  最终都装配同一个 `Agent`，因此界面不是在现成 Agent 产品上套壳。CLI 不需要 Docker、数据库或 Web。
-- Web 强制连接本项目独立的 `coding-agent-postgres`；数据库缺失、不可达或迁移失败会阻止 Web 启动，
-  不会静默降级。PostgreSQL 持久化 workspace、conversation、可见 message、run、安全 event、approval
-  和 memory，但没有隐藏推理、原始提供方响应或完整工具输出字段。
-- 记忆按规范化 workspace 隔离。run、当前 user message、可见历史和实际 memory 集合在同一事务中冻结；
-  最多 32 条、正文合计不超过 32000 字符。模型没有写记忆工具，结果必须由用户编辑确认后保存。
-- run 创建与 memory 修改都先锁 workspace；同一 workspace 的活动 run 和记忆写入互斥，避免运行中的
-  代码调用本机 API 绕过确认。首版不做 embedding、向量检索或跨工作区画像。
+跨运行只使用有界的用户可见消息。单次运行保留 system、user、assistant tool turn 和 tool result。记忆是创建运行时冻结的普通用户数据，当前任务固定放在最后。
 
-## 为什么选择 PostgreSQL 和数据库重放 SSE
+### 为什么不把工具结果永久保存到会话？
 
-- WebUI 需要长期保存工作区、会话、消息、审批和记忆；项目已移除早期的 SQLite 单文件记忆实现，
-  PostgreSQL 能更直接地承载部分唯一索引、行锁和多工作区并发语义，因此由 SQLAlchemy 2、
-  psycopg 3 与 Alembic 管理独立数据库。这是工程取舍，不是宣称 SQLite 无法保存这些实体。
-- 同一 workspace 最多一个活动 run 既有应用层友好检查，也有 PostgreSQL 部分唯一索引兜底；
-  `client_request_id` 使浏览器重试不会重复创建 user message 和 run。
-- SSE 事件显式使用 `(run_id, seq)`。断线后按 `Last-Event-ID` 从数据库重放，进程内 EventBuffer 只负责
-  唤醒实时连接。服务重启把旧活动 run 标为 `interrupted` 并追加事件，不声称继续执行旧进程。
-- 数据库容器只隔离数据依赖，不隔离 Agent 执行。工具和批准的命令仍在当前 Windows 用户权限下运行。
+工具结果可能包含大量源码和命令输出。数据库只保存用户可见消息和脱敏事件；完整工具协议只在当前运行内存在。
 
-## 三档权限为什么要按 run 冻结
+### DeepSeek 的推理字段如何处理？
 
-- `ask` 对文件修改和命令逐次审批；`agent` 自动执行常规工作区操作，但删除文件和风险命令仍需审批；
-  `workspace_full` 自动执行工作区内所有非禁止操作。三者都不能绕过 `DENY`、工作区边界、预算或取消。
-- 权限值随 run 持久化并在后端构造 ToolRegistry 时生效，切换前端下拉框不会改变已经开始的 run。
-- 这是应用级能力控制，不是 OS sandbox；被批准的程序仍可能访问当前用户有权访问的工作区外资源。
+工具回合的 `reasoning_content` 按供应商协议在当前运行内回传。它不展示、不写数据库、不写 trace。
 
-## 可能追问
+### 如何校验模型输出？
 
-- **为何顺序执行多工具？** 避免并发写入顺序不确定；hash 锁可让同轮后续陈旧写失败。首版可靠性优先于吞吐。
-- **为何用官方 OpenAI 客户端不算 Agent SDK？** 它只承担 HTTP 与数据对象；历史、解析、工具、循环、预算和错误策略均为本项目代码。
-- **如何证明不是模型自说完成？** 假模型协议测试验证状态机，真实 smoke 验证线上协议，正式 demo 用 agent 看不到的隐藏日志黑盒验收。
-- **为什么不用 pgvector？** 当前没有冻结 embedding 提供方和模型；先用确定的置顶/更新时间顺序和 32k
-  预算保存真实快照，避免为了“像 RAG”而引入无法解释的向量结果。镜像包含扩展不等于首版已使用向量检索。
+适配器先检查 choice、角色、完成原因、工具类型、调用 ID、函数名、参数类型和 usage。Agent 再检查完成原因组合、ID 唯一性和批次预算。工具参数使用严格 JSON object 解析，拒绝重复键、未知字段、`NaN` 和 `Infinity`。
+
+### 为什么截断响应不能执行？
+
+`finish_reason=length` 可能包含不完整参数。没有完整通过协议校验的模型意图不能触发本地副作用。
+
+### 为什么每个 tool call 都必须有结果？
+
+下一轮请求必须保持 assistant tool call 与 `role=tool` 消息一一配对。普通工具失败也要回填，模型才能根据真实错误修正。
+
+### 一个工具失败会终止运行吗？
+
+通常不会。文件不存在、哈希过期、参数错误和测试非零属于可修正结果。协议错误、API 致命错误、取消和预算耗尽才结束运行。
+
+### 为什么多工具顺序执行？
+
+工具可能修改同一文件，也可能依赖前一个结果。顺序执行使副作用和消息历史可复现，并让 SHA-256 冲突具有明确含义。
+
+### 文件修改如何避免覆盖并发变化？
+
+`read_file` 返回 SHA-256。`replace_text` 和 `delete_file` 要求带回该哈希，并在操作前再次读取校验。哈希不一致时返回 `stale_file`，要求模型重读。
+
+### `write_file` 为什么不能覆盖文件？
+
+创建和修改使用不同合同。`write_file` 采用只创建的原子发布；已有文件必须通过带哈希的 `replace_text` 修改。
+
+### 命令为什么使用 argv 和 `shell=False`？
+
+这样不会隐式解释管道、重定向、变量展开和复合命令。命令还要经过可执行文件解析、环境清理和 ALLOW/CONFIRM/DENY 分类。
+
+### 三档权限有什么区别？
+
+- `ask`：文件修改和命令逐次确认；
+- `agent`：常规修改和安全检查自动执行，删除和风险命令确认；
+- `workspace_full`：工作区内非禁止操作自动执行。
+
+三档都不能绕过命令 `DENY`、工作区边界和受保护文件。
+
+### 为什么权限策略不是安全沙箱？
+
+获准执行的 Python 或其他程序仍拥有当前运行账户权限。`shell=False`、cwd、环境清理和命令分类只能缩小风险，不能提供操作系统级隔离。
+
+### 如何防止无限循环？
+
+模型次数、工具次数、累计 Token 和总墙钟时间都有硬上限。完全相同的工具交换从第三次起提示模型改变策略，但最终停止仍由硬预算保证。
+
+### 为什么重复调用不直接终止？
+
+相同交换只能证明一次操作重复，不能证明整个任务没有语义进展。提示不会篡改原工具结果，也不会引入错误终止。
+
+### 模型返回 final 是否代表任务成功？
+
+不代表。`model_final` 只表示模型停止调用工具。`ChangeCheck` 记录最后修改后是否执行检查，正式评测再由 Agent 工作区外的 verifier 判定。
+
+### Web 如何保证同一工作区不会并发修改？
+
+创建运行先锁工作区，PostgreSQL 还有“每个工作区最多一个活动运行”的部分唯一索引。应用层负责友好错误，数据库约束处理竞争条件。
+
+### SSE 如何断线续传？
+
+事件使用 `(run_id, seq)`。客户端重连后先按 `Last-Event-ID` 从 PostgreSQL 重放，再通过进程内 EventBuffer 等待新事件。
+
+### 记忆为什么必须由用户确认？
+
+记忆会影响同一工作区的后续运行。用户确认可以避免把模型猜测或仓库中的提示注入内容自动持久化。模型只有读取快照的能力。
+
+### 如何证明系统不是套壳？
+
+可以展示三个证据：
+
+1. `Agent.run()` 的显式循环；
+2. 假模型驱动真实工具的离线集成测试；
+3. 工作区外 verifier 对真实模型结果进行独立验收。
+
+### 当前主要边界是什么？
+
+命令执行不是 OS 沙箱；模型响应采用非流式；工具顺序执行；模型 final 仍需测试或 verifier 证明正确性。这些边界在代码、UI 和文档中保持一致。
+
+## 现场源码顺序
+
+1. `agents/agent.py`：循环和终止；
+2. `agents/providers/deepseek.py`：单次模型请求；
+3. `agents/tools/registry.py`：工具分发；
+4. `agents/security/workspace.py`：路径和文件边界；
+5. `tests/integration/test_offline_loop.py`：离线完整闭环；
+6. `docs/evaluation-results/.../BENCHMARK_REPORT.md`：独立评测结果。

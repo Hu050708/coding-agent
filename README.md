@@ -1,144 +1,170 @@
 # Coding Agent
 
-Coding Agent 是一个从零实现的轻量编程智能体，以及一个仅供本机浏览器访问的
-FastAPI + Vue 工作台。模型负责选择工具；本项目自己维护上下文、解析 tool calls、
-校验参数、执行本地文件/命令工具、处理审批和取消，并根据预算与协议状态终止循环。
-内置目录浏览与创建、文件读取/搜索/创建/替换/删除和命令执行八个工具；完全相同的工具交换从
-第三次起会收到调整策略提示，但不会被误判为任务失败或提前终止。
+Coding Agent 是一个本地编程智能体，提供命令行和 Web 两种入口。模型负责选择下一步操作；项目负责维护上下文、解析工具调用、校验权限、执行本地工具并控制终止。
 
-默认通过 DeepSeek 官方 Chat Completions API 使用 `deepseek-v4-flash`。运行时不依赖
-现成 Coding Agent、Agent 框架、Agent SDK、MCP、远程代码执行或远程文件工具。
+默认使用 DeepSeek 官方 Chat Completions API 和 `deepseek-v4-flash`。运行时不依赖 Agent 框架、Agent SDK、MCP、服务端文件工具或远程代码执行。
 
-## 目录与架构
+## 主要能力
 
-```text
-coding-agent/
-├─ backend/                 # Python、Agent 核心、FastAPI、PostgreSQL、测试与文档
-├─ frontend/                # Vue 3、TypeScript、Vite、Pinia、Vue Router
-├─ compose.yml              # 前端、后端、PostgreSQL 三容器部署入口
-├─ DOCKER_DEPLOY.md         # Docker 部署、更新和排错说明
-├─ README.md
-└─ .gitignore
-```
+- 显式 Agent 循环：完整处理模型回复、工具调用、工具结果和终止状态。
+- 八个本地工具：目录浏览、文件读取、文本搜索、目录创建、文件创建、精确替换、文件删除和命令执行。
+- 工作区边界：拒绝绝对路径、父目录穿越、受保护文件和越界链接。
+- 文件并发保护：修改和删除必须携带最近读取结果的 SHA-256。
+- 三档权限：运行开始时冻结，由后端执行。
+- Web 工作台：持久会话、审批、取消、运行时间线和 SSE 断线重放。
+- 工作区记忆：只由用户确认写入，每次运行使用创建时冻结的快照。
+- 独立评测：Agent 只操作候选副本，工作区外 verifier 判断结果。
 
-后端只有一个 Python 导入命名空间 `coding_agent`，主要边界如下：
+## 架构
 
 ```text
-CLI ────────────────────────────────┐
-                                    v
-FastAPI -> services -> runs -> Agent core -> DeepSeek client
-              |             |          |
-              v             v          `-> local tools + security policy
-          data          safe SSE
-              |
-              `-> PostgreSQL: workspace / conversation / run / message /
-                              event / approval / memory
+CLI ──────────────────────────────────────┐
+                                          v
+Vue -> FastAPI -> 应用服务 -> RunManager -> Agent -> DeepSeek
+                    |              |          |
+                    v              v          `-> 本地工具与安全策略
+                PostgreSQL      SSE 事件
 ```
 
-## Docker 三容器部署
+后端统一使用 `coding_agent` 命名空间：
 
-接收者只需安装 Docker Desktop 或 Docker Engine，不需要单独安装 Python、Conda、Node.js
-和 PostgreSQL。复制根目录环境模板，填写 DeepSeek 密钥、数据库密码和允许挂载的工作区：
+```text
+backend/src/coding_agent/
+├─ agents/          # Agent 核心、模型适配器、工具、安全策略和运行管理
+├─ router/          # FastAPI 路由
+├─ services/        # 工作区、会话、运行、记忆和评测用例
+├─ repository/      # PostgreSQL 事务与查询
+├─ models/          # SQLAlchemy 表模型
+├─ schemas/         # API 请求与响应
+├─ database/        # 连接、迁移和启动恢复
+├─ cli.py           # CLI 入口
+└─ main.py          # Web 应用入口
+```
+
+项目根目录：
+
+```text
+.
+├─ backend/
+├─ frontend/
+├─ compose.yml
+├─ DOCKER_DEPLOY.md
+└─ README.md
+```
+
+## Docker 启动
+
+只需安装 Docker Desktop 或 Docker Engine。
 
 ```powershell
 Copy-Item .env.docker.example .env
+```
+
+编辑根目录 `.env`，至少填写：
+
+```dotenv
+DEEPSEEK_API_KEY=你的密钥
+CODING_AGENT_POSTGRES_PASSWORD=至少32位且仅含字母数字下划线和连字符的密码
+CODING_AGENT_WORKSPACE_PATH=E:/code
+```
+
+启动服务：
+
+```powershell
 docker compose up -d --build
 docker compose ps
 ```
 
-浏览器访问 <http://127.0.0.1:8080/>，API 文档位于
-<http://127.0.0.1:8080/api/docs>。正式 Compose 只向宿主机回环地址开放前端；后端和
-PostgreSQL 只在容器网络内通信。完整配置、数据卷、远程服务器访问和排错方法见
-[`DOCKER_DEPLOY.md`](DOCKER_DEPLOY.md)。
+访问地址：
 
-## 本机配置
+- Web：<http://127.0.0.1:8080/>
+- API 文档：<http://127.0.0.1:8080/api/docs>
+- 健康检查：<http://127.0.0.1:8080/api/v1/health>
 
-Web 从未入库的 `backend/.env` 读取配置。以 `backend/.env.example` 为模板，至少填写：
+部署和排错见 [DOCKER_DEPLOY.md](DOCKER_DEPLOY.md)。
 
-```dotenv
-DEEPSEEK_API_KEY=replace-with-your-own-key
-CODING_AGENT_ALLOWED_ROOT=E:\code
-CODING_AGENT_POSTGRES_PASSWORD=replace-with-a-strong-local-password
-CODING_AGENT_DATABASE_URL=postgresql+psycopg://coding_agent:replace-with-a-strong-local-password@127.0.0.1:5434/coding_agent
-```
+## 本地开发
 
-数据库密码出现在 URL 中时要进行 URL 编码。`CODING_AGENT_ALLOWED_ROOT` 必须是已存在的
-绝对目录；Web 的目录浏览器只能注册它下面的工作区。不要把真实密钥或密码写入仓库、
-终端录屏、截图、提交用 README 或视频。
-
-
-## 三档运行权限
-
-权限在每次运行创建时冻结，并由后端执行，不是前端标签：
-
-- `ask`（请求批准）：读取自动执行，修改文件和运行命令前逐次询问；
-- `agent`（帮我批准）：常规工作区修改和检查自动执行，删除文件与风险命令仍需询问；
-- `workspace_full`（工作区完全访问）：自动执行工作区内所有非禁止操作。
-
-所有模式都不能越出当前工作区，也不能绕过命令策略中的 `DENY`。
-
-## 会话与工作区记忆
-
-PostgreSQL 保存工作区、会话、可见消息、运行、可重放事件、审批和记忆。会话历史与工作区
-记忆是两类数据：历史按会话回放；记忆只在同一工作区共享，且必须由用户在界面中明确
-新增或确认，模型没有写记忆工具。
-
-每次运行在创建事务中冻结一次实际送给模型的记忆集合：最多 32 条、正文合计不超过
-32000 字符。运行期间不再查询新记忆。同一工作区有活动运行时，记忆新增、编辑、删除和
-清空都会被后端拒绝，避免运行中的代码绕过确认。当前版本不做 embedding、pgvector 检索、
-跨工作区画像或模型自动记忆。
-
-## CLI
-
-CLI 与 Web 相互独立，不需要启动 Docker、PostgreSQL、FastAPI 或前端：
+### 后端
 
 ```powershell
+Set-Location backend
+conda env create -f environment.yml
 conda activate coding-agent
-coding-agent --workspace E:\path\to\project "修复日期边界问题，补回归测试并运行测试"
+Copy-Item .env.example .env
 ```
 
-CLI 只读取当前终端进程中的 `DEEPSEEK_API_KEY`，不会读取 `backend/.env`。默认逐条确认
-非白名单命令；`--yes` 只能批准策略判定为 `CONFIRM` 的命令，不能绕过 `DENY`。
-
-## 可复现 Agent 评测
-
-项目内置 Bug 修复、多文件功能和配置回归三类合成任务。每次试验都会复制全新工作区，
-运行同一个 Agent CLI，再由工作区外 verifier 验收；模型最终回答不作为成功依据。
+编辑 `backend/.env`，配置 DeepSeek、允许的工作区根目录和 PostgreSQL。然后启动数据库和 API：
 
 ```powershell
-Set-Location E:\code\coding-agent\backend
-$env:DEEPSEEK_API_KEY="你的实际密钥"
+docker compose --env-file .env -f deploy/compose.yml up -d
+coding-agent-web
+```
+
+### 前端
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev
+```
+
+开发地址为 <http://127.0.0.1:5173/>。
+
+### CLI
+
+CLI 不依赖 PostgreSQL、FastAPI 或前端，也不会读取 `backend/.env`。密钥必须来自当前进程环境。
+
+```powershell
+$env:DEEPSEEK_API_KEY="你的密钥"
+coding-agent --workspace E:\path\to\project "修复问题，补充回归测试并运行测试"
+```
+
+## 权限模式
+
+| 模式 | 文件修改 | 文件删除 | 命令 |
+|---|---|---|---|
+| `ask` | 逐次确认 | 逐次确认 | 逐次确认 |
+| `agent` | 工作区内自动执行 | 需要确认 | 安全检查自动执行，其他命令按策略确认 |
+| `workspace_full` | 工作区内自动执行 | 工作区内自动执行 | 除硬拒绝命令外自动执行 |
+
+所有模式都遵守工作区边界、受保护路径、工具参数合同和命令 `DENY` 规则。
+
+## 会话与记忆
+
+PostgreSQL 保存工作区、会话、可见消息、运行、事件、审批和记忆。隐藏推理、原始供应商响应和完整工具输出不写入数据库。
+
+运行创建事务同时完成以下操作：
+
+1. 创建运行和当前用户消息；
+2. 截取有界的可见会话历史；
+3. 冻结本次使用的记忆快照；
+4. 固定权限模式和模型。
+
+记忆按工作区隔离，最多装载 32 条，正文合计不超过 32,000 字符。模型没有写记忆工具。
+
+## 评测
+
+在 `backend/` 目录运行三类任务、每类三次：
+
+```powershell
+$env:DEEPSEEK_API_KEY="你的密钥"
 python -m evaluation.run_benchmark --model deepseek-v4-flash --repeats 3
 ```
 
-系统会生成逐轮 JSON、汇总 JSON 和中文 Markdown 报告，包含调用次数、Token、耗时、
-工具失败、文件变化、终止原因和独立验收结果。详细说明见
-[`backend/evaluation/README.md`](backend/evaluation/README.md)。
+每轮都从新的任务副本开始，并由 Agent 工作区外的 verifier 验收。评测设计见 [backend/evaluation/README.md](backend/evaluation/README.md)。
 
-### 正式评测结果
+仓库保存了一份固定结果：提交 `536c94158978afc68ab0a273635a94807bba5135` 在 2026-08-29 完成 9 次试验，独立验收和 Agent 端到端结果均为 9/9。该结果只对应报告记录的提交、模型和任务集。
 
-2026-08-29 在提交 `536c94158978afc68ab0a273635a94807bba5135` 上使用
-`deepseek-v4-flash` 完成三类任务各三轮的正式评测。评测开始时 Git 工作区干净，报告记录
-`source_dirty: false`。结果如下：
-
-- 工作区外独立验收：9/9；
-- Agent 端到端成功：9/9；
-- 最后一次修改后测试通过：9/9；
-- 内部检查与外部验收不一致：0 次；
-- 平均耗时 38.4 秒，中位耗时 40.9 秒，最长耗时 53.1 秒；
-- 平均 Token 112,847，中位 Token 119,789，最大 Token 169,134。
-
-固定保存的[中文评测报告](backend/docs/evaluation-results/benchmark-20260829T140452Z/BENCHMARK_REPORT.md)
-和[机器可读汇总](backend/docs/evaluation-results/benchmark-20260829T140452Z/summary.json)包含每轮的
-模型与工具调用、文件变化、修改后检查和 verifier 结果。该结果只用于描述本项目在固定合成
-任务上的表现，不声称具有统计显著性或能代表任意真实项目。
+- [中文报告](backend/docs/evaluation-results/benchmark-20260829T140452Z/BENCHMARK_REPORT.md)
+- [机器可读汇总](backend/docs/evaluation-results/benchmark-20260829T140452Z/summary.json)
 
 ## 验证
 
 后端：
 
 ```powershell
-Set-Location E:\code\coding-agent\backend
+Set-Location backend
 conda activate coding-agent
 python -m pytest
 python -m compileall -q src
@@ -149,23 +175,29 @@ coding-agent-web --help
 前端：
 
 ```powershell
-Set-Location E:\code\coding-agent\frontend
+Set-Location frontend
 npm test
 npm run typecheck
 npm run build
 ```
 
-## 安全与题目边界
+## 安全边界
 
-工作区路径校验、受保护文件、权限模式、命令分类、敏感环境变量清理、审批和本机绑定能
-降低风险，但它们不是操作系统沙箱。数据库容器只承载 PostgreSQL，也不是 Agent 执行
-沙箱。被批准的 Python 或其他程序仍拥有当前 Windows 用户的权限，可能访问工作区外资源。
+- 文件工具只处理当前工作区，但获准执行的程序仍拥有当前运行账户的权限。
+- `shell=False`、命令分类和环境变量清理不能替代操作系统沙箱。
+- 任务、源码片段和工具结果会发送到 DeepSeek，不应处理未经授权的敏感代码。
+- Web 只用于本机或 SSH 隧道访问，不应直接暴露到局域网或公网。
+- API Key、数据库密码、`.env`、运行临时目录和视频不得提交到仓库。
 
-发送给模型的任务、源码片段和工具结果会离开本机并到达 DeepSeek，不应处理未获授权的
-敏感代码。Web 不应通过端口转发、反向代理或修改监听地址暴露到局域网或公网。
+## 文档
 
-本项目只使用官方 API 客户端完成 HTTP/数据对象适配；历史、上下文、工具 schema、本地执行、
-模型响应解析、循环终止和错误处理均由项目实现。未使用现成 Agent、Agent 框架/SDK、Files
-API、Code Interpreter 或服务端托管代码/文件工具。完整设计见
-[backend/docs/DESIGN.md](backend/docs/DESIGN.md)，AI 使用声明见
-[backend/AI_USAGE.md](backend/AI_USAGE.md)。
+- [后端开发与源码入口](backend/README.md)
+- [实现设计](backend/docs/DESIGN.md)
+- [面试答辩要点](backend/docs/INTERVIEW_NOTES.md)
+- [两分钟视频方案](backend/docs/VIDEO_PLAN.md)
+- [Docker 部署](DOCKER_DEPLOY.md)
+- [评测说明](backend/evaluation/README.md)
+
+## 开发声明
+
+开发过程中使用 Codex/ChatGPT 辅助需求分析、实现和审查；作者负责设计决策、代码验证和最终提交。运行时的 Agent 核心由本项目实现。

@@ -26,7 +26,6 @@ _DEFAULT_MAX_OUTPUT_CHARS = 20_000
 _MAX_PREVIEW_CHARS = 500
 _MAX_DIRECTORY_ENTRIES = 10_000
 
-
 def search_text(
     workspace: Workspace,
     arguments: Mapping[str, Any],
